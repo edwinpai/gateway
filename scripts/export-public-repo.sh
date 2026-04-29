@@ -152,6 +152,54 @@ fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}
 `);
 NODE
 
+  mkdir -p "$TARGET_DIR/src/config" "$TARGET_DIR/src/agents/pi-embedded-runner"
+  cat > "$TARGET_DIR/src/config/types.ts" <<'EOF'
+// Public export type shim.
+// Protected memory/config internals are intentionally excluded from this repo.
+export type EdwinPAIConfig = Record<string, unknown>;
+export type ConfigFileSnapshot = Record<string, unknown>;
+export type ConfigValidationIssue = Record<string, unknown>;
+export type LegacyConfigIssue = Record<string, unknown>;
+export type DmPolicy = Record<string, unknown>;
+export type DmConfig = Record<string, unknown>;
+export type GroupPolicy = Record<string, unknown>;
+export type GroupToolPolicyConfig = Record<string, unknown>;
+export type GroupToolPolicyBySenderConfig = Record<string, unknown>;
+export type MarkdownConfig = Record<string, unknown>;
+export type MarkdownTableMode = string;
+export type ReplyToMode = string;
+export type TelegramAccountConfig = Record<string, unknown>;
+export type TelegramGroupConfig = Record<string, unknown>;
+export type TelegramTopicConfig = Record<string, unknown>;
+export type WhatsAppConfig = Record<string, unknown>;
+export type DiscordConfig = Record<string, unknown>;
+EOF
+
+  cat > "$TARGET_DIR/src/agents/pi-embedded-runner/system-prompt.ts" <<'EOF'
+// Public export runtime shim.
+// Full prompt/memory composition internals are protected and excluded from this repo.
+export function buildEmbeddedSystemPrompt(params: { extraSystemPrompt?: string } = {}): string {
+  return params.extraSystemPrompt?.trim() ?? "";
+}
+
+export function createSystemPromptOverride(systemPrompt: string): (defaultPrompt?: string) => string {
+  const override = systemPrompt.trim();
+  return (_defaultPrompt?: string) => override;
+}
+
+export function applySystemPromptOverrideToSession(
+  session: { agent?: { state?: { systemPrompt?: string } }; _baseSystemPrompt?: string; _rebuildSystemPrompt?: () => string },
+  override: string | ((defaultPrompt?: string) => string),
+) {
+  const prompt = typeof override === "function" ? override() : override.trim();
+  if (session.agent?.state) {
+    session.agent.state.systemPrompt = prompt;
+  }
+  session._baseSystemPrompt = prompt;
+  session._rebuildSystemPrompt = () => prompt;
+}
+EOF
+
   mkdir -p "$TARGET_DIR/.github/workflows"
   cat > "$TARGET_DIR/.github/workflows/npm-publish.yml" <<'EOF'
 name: Publish @edwinpai/edwinpai
