@@ -66,6 +66,12 @@ RSYNC_ARGS=(
   --exclude '/npm-debug.log*'
   --exclude '/pnpm-debug.log*'
   --exclude '/docs/internal/'
+  --exclude '/archive/'
+  --exclude '/packages/identity-core/'
+  --exclude '/packages/shad-core/'
+  --exclude '/src/identity-core*'
+  --exclude '/src/shad-core*'
+  --exclude '/src/memory/'
   --exclude '/packages/identity-core/native-staging/'
   --exclude '/.DS_Store'
 )
