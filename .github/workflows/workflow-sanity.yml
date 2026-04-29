@@ -5,33 +5,29 @@ on:
   push:
 
 jobs:
-  no-tabs:
+  public-wrapper-sanity:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Guard protected source boundaries
+        run: |
+          chmod +x scripts/public-export-guard.sh scripts/public-package-manifest-check.mjs
+          scripts/public-export-guard.sh .
+          node scripts/public-package-manifest-check.mjs .
 
       - name: Fail on tabs in workflow files
         run: |
           python - <<'PY'
           from __future__ import annotations
-
           import pathlib
           import sys
-
-          root = pathlib.Path(".github/workflows")
-          bad: list[str] = []
-          for path in sorted(root.rglob("*.yml")):
-            if b"\t" in path.read_bytes():
-              bad.append(str(path))
-
-          for path in sorted(root.rglob("*.yaml")):
-            if b"\t" in path.read_bytes():
-              bad.append(str(path))
-
-          if bad:
-            print("Tabs found in workflow file(s):")
-            for path in bad:
-              print(f"- {path}")
-            sys.exit(1)
+          failures = []
+          for path in pathlib.Path('.github/workflows').glob('*.yml'):
+              for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                  if '\t' in line:
+                      failures.append(f'{path}:{line_number}: tab character found')
+          if failures:
+              print('\n'.join(failures))
+              sys.exit(1)
           PY

@@ -47,7 +47,7 @@ RSYNC_ARGS=(
   --delete
   --delete-excluded
   --exclude '/.git/'
-  --exclude '/.github/workflows/publish-to-public.yml'
+  --exclude '/.github/workflows/'
   --exclude '/.agent/'
   --exclude '/.claude/'
   --exclude '/.pi/'
@@ -275,6 +275,42 @@ export function applySystemPromptOverrideToSession(
 EOF
 
   mkdir -p "$TARGET_DIR/.github/workflows"
+  cat > "$TARGET_DIR/.github/workflows/workflow-sanity.yml" <<'EOF'
+name: Workflow Sanity
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  public-wrapper-sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard protected source boundaries
+        run: |
+          chmod +x scripts/public-export-guard.sh scripts/public-package-manifest-check.mjs
+          scripts/public-export-guard.sh .
+          node scripts/public-package-manifest-check.mjs .
+
+      - name: Fail on tabs in workflow files
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import pathlib
+          import sys
+          failures = []
+          for path in pathlib.Path('.github/workflows').glob('*.yml'):
+              for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                  if '\t' in line:
+                      failures.append(f'{path}:{line_number}: tab character found')
+          if failures:
+              print('\n'.join(failures))
+              sys.exit(1)
+          PY
+EOF
+
   cat > "$TARGET_DIR/.github/workflows/npm-publish.yml" <<'EOF'
 name: Publish @edwinpai/edwinpai
 
