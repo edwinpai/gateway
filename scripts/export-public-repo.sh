@@ -131,19 +131,29 @@ pkg.publishConfig = {
   access: "restricted",
   tag: "beta",
 };
-pkg.scripts = pkg.scripts || {};
-pkg.scripts.build = "pnpm build:gateway";
-delete pkg.scripts["build:protected"];
-delete pkg.scripts["check:protected-cores"];
-delete pkg.scripts["release:check"];
-pkg.dependencies = pkg.dependencies || {};
-if (pkg.dependencies["@edwinpai/identity-core"] === "workspace:*") {
-  pkg.dependencies["@edwinpai/identity-core"] = "1.0.0-beta.2";
-}
-if (pkg.dependencies["@edwinpai/shad-core"] === "workspace:*") {
-  pkg.dependencies["@edwinpai/shad-core"] = "1.0.0-beta.2";
-}
-for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+pkg.bin = { edwinpai: "edwinpai.mjs" };
+pkg.exports = {
+  ".": "./dist/index.js",
+  "./cli-entry": "./edwinpai.mjs",
+};
+pkg.files = ["dist/", "edwinpai.mjs", "LICENSE", "README.md", "README-header.png"];
+pkg.scripts = {
+  build: "tsdown",
+  prepack: "pnpm build",
+};
+pkg.dependencies = {
+  "@edwinpai/identity-core": "1.0.0-beta.2",
+  "@edwinpai/shad-core": "1.0.0-beta.2",
+};
+delete pkg.peerDependencies;
+delete pkg.peerDependenciesMeta;
+pkg.devDependencies = {
+  "@types/node": "^25.2.0",
+  tsdown: "^0.20.1",
+  tsx: "^4.21.0",
+  typescript: "^5.9.3",
+};
+for (const section of ["dependencies", "devDependencies"]) {
   if (pkg[section]) {
     pkg[section] = Object.fromEntries(Object.entries(pkg[section]).sort(([a], [b]) => a.localeCompare(b)));
   }
@@ -172,15 +182,44 @@ export default defineConfig([
     fixedExtension: false,
     platform: "node",
   },
-  {
-    dts: true,
-    entry: "src/plugin-sdk/index.ts",
-    outDir: "dist/plugin-sdk",
-    env,
-    fixedExtension: false,
-    platform: "node",
-  },
 ]);
+EOF
+
+  mkdir -p "$TARGET_DIR/src"
+  cat > "$TARGET_DIR/src/index.ts" <<'EOF'
+export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.2";
+export const EDWINPAI_GATEWAY_CORE_PACKAGE = "@edwinpai/gateway-core";
+
+export async function loadGatewayCore(): Promise<unknown> {
+  const packageName = process.env.EDWINPAI_GATEWAY_CORE_PACKAGE ?? EDWINPAI_GATEWAY_CORE_PACKAGE;
+  return import(packageName);
+}
+EOF
+
+  cat > "$TARGET_DIR/src/entry.ts" <<'EOF'
+#!/usr/bin/env node
+import process from "node:process";
+import { loadGatewayCore, EDWINPAI_GATEWAY_CORE_PACKAGE } from "./index.js";
+
+async function main() {
+  const runtime = await loadGatewayCore().catch((error: unknown) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `EdwinPAI protected gateway runtime is not installed. Expected compiled runtime package ${EDWINPAI_GATEWAY_CORE_PACKAGE}. ` +
+        `Publish/install the protected runtime package before using this public wrapper. ${detail}`,
+    );
+  });
+  const maybeRunCli = (runtime as { runCli?: (argv: string[]) => unknown }).runCli;
+  if (typeof maybeRunCli !== "function") {
+    throw new Error(`Protected gateway runtime package ${EDWINPAI_GATEWAY_CORE_PACKAGE} does not export runCli(argv).`);
+  }
+  await maybeRunCli(process.argv);
+}
+
+main().catch((error) => {
+  console.error("[edwinpai]", error instanceof Error ? (error.stack ?? error.message) : error);
+  process.exitCode = 1;
+});
 EOF
 
   mkdir -p "$TARGET_DIR/src/config" "$TARGET_DIR/src/agents/pi-embedded-runner"
