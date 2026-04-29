@@ -122,6 +122,26 @@ rsync "${RSYNC_ARGS[@]}" ./ "$TARGET_DIR"/
 # future public release workflows available in the copied tree.
 
 if [[ "$DRY_RUN" != "1" ]]; then
+  node - "$TARGET_DIR/package.json" <<'NODE'
+const fs = require("node:fs");
+const packagePath = process.argv[2];
+const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+pkg.dependencies = pkg.dependencies || {};
+if (pkg.dependencies["@edwinpai/identity-core"] === "workspace:*") {
+  pkg.dependencies["@edwinpai/identity-core"] = "1.0.0-beta.2";
+}
+if (pkg.dependencies["@edwinpai/shad-core"] === "workspace:*") {
+  pkg.dependencies["@edwinpai/shad-core"] = "1.0.0-beta.2";
+}
+for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+  if (pkg[section]) {
+    pkg[section] = Object.fromEntries(Object.entries(pkg[section]).sort(([a], [b]) => a.localeCompare(b)));
+  }
+}
+fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}
+`);
+NODE
+
   cat > "$TARGET_DIR/PUBLIC_EXPORT.md" <<'EOF'
 # Public Gateway Export
 
