@@ -1,0 +1,15 @@
+name: heartbeat
+description: "Periodic memory persistence and task triage — replaces built-in heartbeat"
+
+steps:
+  # Step 1: Flush recent session context to daily notes
+  - id: memory-flush
+    exec: |
+      bash ~/.edwinpai/workspace/workflows/memory-flush.sh
+    timeout: 60s
+
+  # Step 2: Task triage — check overdue/stale items
+  - id: task-triage
+    exec: |
+      bash ~/.edwinpai/workspace/workflows/task-triage.sh
+    timeout: 30s

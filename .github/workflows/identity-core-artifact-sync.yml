@@ -1,0 +1,171 @@
+name: Identity Core Artifact Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Protected build-origin repository that produced identity-core artifacts
+        required: false
+        default: jonesj38/edwin-desktop
+        type: string
+      source_run_id:
+        description: GitHub Actions run id in the source repository to ingest from
+        required: true
+        type: string
+      artifact_pattern:
+        description: Artifact name or pattern to download from the source run
+        required: false
+        default: identity-core-*
+        type: string
+  repository_dispatch:
+    types:
+      - identity-core-artifacts-ready
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sync-identity-core-artifacts:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REPOSITORY: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.source_repository || inputs.source_repository || 'jonesj38/edwin-desktop' }}
+      SOURCE_RUN_ID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.source_run_id || inputs.source_run_id }}
+      ARTIFACT_PATTERN: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.artifact_pattern || inputs.artifact_pattern || 'identity-core-*' }}
+      IDENTITY_CORE_SOURCE_REPO_TOKEN: ${{ secrets.IDENTITY_CORE_SOURCE_REPO_TOKEN }}
+      PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
+      FALLBACK_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate source inputs
+        shell: bash
+        env:
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPOSITORY"
+          test -n "$SOURCE_RUN_ID"
+
+          if [[ "$SOURCE_REPOSITORY" != "$CURRENT_REPOSITORY" \
+            && -z "${IDENTITY_CORE_SOURCE_REPO_TOKEN:-}" \
+            && -z "${PUBLIC_REPO_PAT:-}" ]]; then
+            echo "identity-core sync requires IDENTITY_CORE_SOURCE_REPO_TOKEN or PUBLIC_REPO_PAT for cross-repo artifact download from $SOURCE_REPOSITORY" >&2
+            exit 1
+          fi
+
+      - name: Download protected identity-core artifacts
+        shell: bash
+        env:
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh --version
+          rm -rf .tmp/identity-core-artifacts
+          mkdir -p .tmp/identity-core-artifacts
+
+          try_download() {
+            local label="$1"
+            local token="$2"
+            [[ -n "$token" ]] || return 1
+
+            echo "Trying artifact access with ${label}..."
+            if ! GH_TOKEN="$token" gh api "repos/${SOURCE_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[].name' >/tmp/identity-core-artifact-names.txt; then
+              echo "Artifact listing failed with ${label}." >&2
+              return 1
+            fi
+
+            echo "Artifacts visible with ${label}:"
+            sed 's/^/  - /' /tmp/identity-core-artifact-names.txt || true
+
+            rm -rf .tmp/identity-core-artifacts/*
+            if GH_TOKEN="$token" gh run download "$SOURCE_RUN_ID" \
+              --repo "$SOURCE_REPOSITORY" \
+              -p "$ARTIFACT_PATTERN" \
+              -D .tmp/identity-core-artifacts; then
+              echo "Artifact download succeeded with ${label}."
+              return 0
+            fi
+
+            echo "Artifact download failed with ${label}." >&2
+            return 1
+          }
+
+          if [[ "$SOURCE_REPOSITORY" == "$CURRENT_REPOSITORY" ]] \
+            && try_download "GITHUB_TOKEN" "${FALLBACK_GITHUB_TOKEN:-}"; then
+            exit 0
+          fi
+
+          if try_download "IDENTITY_CORE_SOURCE_REPO_TOKEN" "${IDENTITY_CORE_SOURCE_REPO_TOKEN:-}"; then
+            exit 0
+          fi
+
+          if try_download "PUBLIC_REPO_PAT" "${PUBLIC_REPO_PAT:-}"; then
+            exit 0
+          fi
+
+          echo "Unable to download identity-core artifacts from ${SOURCE_REPOSITORY} run ${SOURCE_RUN_ID}."
+          echo "Checked IDENTITY_CORE_SOURCE_REPO_TOKEN and PUBLIC_REPO_PAT for cross-repo access."
+          echo "The configured token likely lacks Actions read access to ${SOURCE_REPOSITORY}, or points at the wrong repository scope."
+          exit 1
+
+      - name: Normalize artifact bundles into consumer staging layout
+        run: |
+          node --import tsx scripts/sync-identity-core-artifacts.ts \
+            --source-dir .tmp/identity-core-artifacts \
+            --out-dir packages/identity-core/native-staging
+
+      - name: Prepare truthful companion platform-package dirs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/identity-core-platform-package-prep
+          node --import tsx scripts/prepare-identity-core-platform-packages.ts \
+            --staging-dir packages/identity-core/native-staging \
+            --out-dir .tmp/identity-core-platform-package-prep \
+            | tee .tmp/identity-core-platform-package-prep-result.json
+
+      - name: Detect prepared companion platform packages
+        id: prepared-packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find .tmp/identity-core-platform-package-prep -name package.json -print -quit | grep -q .; then
+            echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload normalized staging bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-core-native-staging-${{ github.run_id }}
+          path: packages/identity-core/native-staging
+          if-no-files-found: error
+
+      - name: Upload companion package prep report
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-core-platform-package-prep-report-${{ github.run_id }}
+          path: .tmp/identity-core-platform-package-prep-result.json
+          if-no-files-found: error
+          include-hidden-files: true
+
+      - name: Upload prepared companion platform packages
+        if: steps.prepared-packages.outputs.has_packages == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-core-platform-package-prep-${{ github.run_id }}
+          path: .tmp/identity-core-platform-package-prep
+          if-no-files-found: error
+          include-hidden-files: true

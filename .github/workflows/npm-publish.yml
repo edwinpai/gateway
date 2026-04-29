@@ -1,0 +1,231 @@
+name: NPM Publish
+
+on:
+  # Publishing is frozen after the 1.0.0-beta.1 package exposure incident.
+  # Re-enable only after package contents and visibility policy are reviewed.
+  # push:
+  #   tags:
+  #     - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/npm-publish.yml"
+      - "packages/identity-core/**"
+      - "packages/shad-core/**"
+      - "scripts/prepare-identity-core-base-package.ts"
+      - "scripts/prepare-identity-core-platform-packages.ts"
+      - "src/identity-core-base-package-prep.ts"
+      - "src/identity-core-platform-package-prep.ts"
+      - "docs/internal/compiled-core-npm-architecture.md"
+      - "docs/internal/identity-core-companion-publication-lifecycle.md"
+      - "docs/internal/identity-core-package-publish-path.md"
+      - "docs/internal/identity-rollout-ledger.md"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: false # frozen: do not publish @edwinpai packages until privacy review is complete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Protected-core publish gate
+        run: pnpm check:protected-cores
+
+      - name: Prepare truthful identity-core companion platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp/identity-core-platform-packages
+          mkdir -p .tmp/identity-core-platform-packages
+
+          if [[ ! -d packages/identity-core/native-staging ]]; then
+            echo "No packages/identity-core/native-staging directory present; skipping companion package preparation."
+            printf '{\n  "ok": true,\n  "skipped": true,\n  "reason": "packages/identity-core/native-staging missing"\n}\n' \
+              > .tmp/identity-core-platform-packages/result.json
+            exit 0
+          fi
+
+          node --import tsx scripts/prepare-identity-core-platform-packages.ts \
+            --staging-dir packages/identity-core/native-staging \
+            --out-dir .tmp/identity-core-platform-packages \
+            | tee .tmp/identity-core-platform-packages/result.json
+
+      - name: Prepare publishable @edwinpai/identity-core base package with truthful companion optionalDependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp/identity-core-base-package
+
+          node --import tsx scripts/prepare-identity-core-base-package.ts \
+            --package-dir packages/identity-core \
+            --out-dir .tmp/identity-core-base-package \
+            --companion-packages-root .tmp/identity-core-platform-packages
+
+      - name: Publish prepared identity-core companion platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dirs=(.tmp/identity-core-platform-packages/@edwinpai/identity-core-*)
+          if (( ${#dirs[@]} == 0 )); then
+            echo "No truthful staged identity-core.node companion packages were prepared; skipping companion package publish."
+            exit 0
+          fi
+
+          for dir in "${dirs[@]}"; do
+            echo "Publishing $dir"
+            (
+              cd "$dir"
+              package_name=$(node -p "require('./package.json').name")
+              package_version=$(node -p "require('./package.json').version")
+              if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+                echo "$package_name@$package_version already published; skipping."
+              else
+                npm publish --access restricted
+              fi
+            )
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @edwinpai/identity-core
+        working-directory: .tmp/identity-core-base-package
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "$package_name@$package_version already published; skipping."
+          else
+            npm publish --access restricted
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @edwinpai/shad-core
+        working-directory: packages/shad-core
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "$package_name@$package_version already published; skipping."
+          else
+            npm publish --access restricted
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Do not publish the root @edwinpai/edwinpai package from this private development repo.
+      # That package must be built and published from the sanitized edwinpai/gateway repo.
+
+      - name: Publish @edwinpai/workflows
+        working-directory: extensions/workflows
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "$package_name@$package_version already published; skipping."
+          else
+            npm publish --access restricted
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  dry-run:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Protected-core publish gate
+        run: pnpm check:protected-cores
+
+      - name: Prepare truthful identity-core companion platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp/identity-core-platform-packages
+          mkdir -p .tmp/identity-core-platform-packages
+
+          if [[ ! -d packages/identity-core/native-staging ]]; then
+            echo "No packages/identity-core/native-staging directory present; skipping companion package preparation."
+            printf '{\n  "ok": true,\n  "skipped": true,\n  "reason": "packages/identity-core/native-staging missing"\n}\n' \
+              > .tmp/identity-core-platform-packages/result.json
+            exit 0
+          fi
+
+          node --import tsx scripts/prepare-identity-core-platform-packages.ts \
+            --staging-dir packages/identity-core/native-staging \
+            --out-dir .tmp/identity-core-platform-packages \
+            | tee .tmp/identity-core-platform-packages/result.json
+
+      - name: Prepare publishable @edwinpai/identity-core base package with truthful companion optionalDependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp/identity-core-base-package
+
+          node --import tsx scripts/prepare-identity-core-base-package.ts \
+            --package-dir packages/identity-core \
+            --out-dir .tmp/identity-core-base-package \
+            --companion-packages-root .tmp/identity-core-platform-packages
+
+      - name: Dry run pack prepared identity-core companion platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dirs=(.tmp/identity-core-platform-packages/@edwinpai/identity-core-*)
+          if (( ${#dirs[@]} == 0 )); then
+            echo "No truthful staged identity-core.node companion packages were prepared; skipping companion package pack dry run."
+            exit 0
+          fi
+
+          for dir in "${dirs[@]}"; do
+            echo "Dry-run packing $dir"
+            (
+              cd "$dir"
+              npm pack --dry-run
+            )
+          done
+
+      - name: Dry run pack @edwinpai/identity-core
+        working-directory: .tmp/identity-core-base-package
+        run: npm pack --dry-run
+
+      - name: Dry run pack @edwinpai/shad-core
+        working-directory: packages/shad-core
+        run: npm pack --dry-run
+
+      - name: Dry run pack @edwinpai/edwinpai
+        run: npm pack --dry-run

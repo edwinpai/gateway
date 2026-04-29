@@ -1,0 +1,213 @@
+---
+title: "Knowledge System"
+description: "How Edwin organizes sources, disciplines, and knowledge runs around Shad and QMD."
+---
+
+Edwin's **Knowledge system** is the layer that turns raw documents and prior work into reusable, inspectable context.
+
+It sits between simple file-based memory and full task execution:
+
+- **Memory** stores durable notes and conversation context.
+- **Knowledge** organizes larger source material, curated disciplines, and Shad-generated synthesis runs.
+- **Tasks/agents** consume that knowledge when doing work.
+
+If memory is "things Edwin should remember," Knowledge is "the bodies of material Edwin can work from."
+
+## The three main objects
+
+### Sources
+
+A **source** is where knowledge comes from.
+
+Examples:
+
+- a local folder of markdown files
+- a cloned repo
+- exported notes
+- a website snapshot
+- any Shad/QMD collection input
+
+Sources are the intake layer. They answer:
+
+> What material do we have?
+
+Typical metadata includes:
+
+- origin path or URL
+- sync schedule
+- preset/type
+- collection path
+- last sync status
+
+### Disciplines
+
+A **discipline** is a curated, activatable body of knowledge and method.
+
+A discipline is not just a folder. It is the named unit that says:
+
+- which collections matter
+- what evidence policy to use
+- what artifacts are expected
+- what the current status/freshness is
+- what notes or synthesis should travel with it
+
+Examples:
+
+- `product-strategy`
+- `taxes-2025`
+- `desktop-identity-core`
+- `security-architecture`
+
+Disciplines answer:
+
+> Which knowledge bundle should Edwin use for this kind of work?
+
+### Runs
+
+A **knowledge run** is an execution trace produced by Shad against a knowledge collection.
+
+Runs are for inspection and audit, not just output. A run can show:
+
+- the goal
+- the collection path used
+- the strategy used
+- token usage
+- summary/final result
+- final report markdown
+
+Runs answer:
+
+> What happened when Edwin worked through this knowledge?
+
+## How the pieces fit together
+
+```text
+Sources -> Collections -> Disciplines -> Knowledge Runs -> Reusable context for future work
+```
+
+In practice:
+
+1. You define or sync **sources**.
+2. Those sources map into searchable **collections**.
+3. You group those collections into named **disciplines**.
+4. Shad performs **runs** over that material.
+5. Edwin and other operators inspect the outputs and reuse the result later.
+
+## Relationship to QMD and Shad
+
+The current Knowledge implementation builds on two adjacent systems:
+
+- **QMD** handles collection/index visibility.
+- **Shad** handles deeper knowledge runs and reports.
+
+Current roles:
+
+- QMD is the collection/search substrate.
+- Shad is the synthesis/execution substrate.
+- Edwin surfaces both through a user-facing Knowledge model.
+
+This is why the UI and docs talk about **sources, disciplines, and runs** instead of only "memory" or only "skills."
+
+## Why this exists
+
+Knowledge exists because raw files alone are not enough.
+
+Without a Knowledge layer, Edwin has to choose between:
+
+- giant static prompts
+- ad hoc retrieval over everything
+- burying domain expertise inside agent definitions
+
+The Knowledge system makes the structure explicit:
+
+- sources stay separate from execution
+- disciplines stay separate from agent personas
+- runs stay inspectable and auditable
+- expertise can evolve without rewriting every prompt
+
+## Current storage model
+
+Today, the pieces live in a few different places:
+
+- **Shad sources:** `~/.shad/sources.yaml`
+- **Shad runs:** `~/.shad/history/Runs/`
+- **Desktop discipline registry:** `~/.edwinpai/knowledge/disciplines.json`
+
+That split is important:
+
+- sources and runs come from the Shad toolchain
+- disciplines are currently curated by Edwin/Desktop-side metadata
+
+## Current limitations
+
+The current system is useful, but not fully mature yet.
+
+Known gaps:
+
+- discipline authoring is still file-driven, not a complete in-app editor
+- source/collection syncing depends on external Shad/QMD state
+- not every Edwin surface explains Knowledge yet
+- discipline selection/runtime attachment policies are still evolving
+- architecture is ahead of the UX in a few places
+
+## Example discipline record
+
+Current desktop builds read discipline data from `~/.edwinpai/knowledge/disciplines.json`. EdwinPAI subagent runtime policy can also resolve named profiles from this registry by discipline `id` when no config-defined profile with the same id overrides it. In that fallback path, `selectedCollections` and `runtimeAttachmentPolicy` are enforced as the spawned subagent's mounted memory policy.
+
+Example:
+
+```json
+{
+  "disciplines": [
+    {
+      "id": "desktop-identity-core",
+      "name": "Desktop Identity Core",
+      "description": "Identity and crypto-wrapper work for the desktop app.",
+      "selectedCollections": ["edwin-desktop", "identity-core-notes"],
+      "status": "active",
+      "createdAt": "2026-04-26T10:00:00Z",
+      "updatedAt": "2026-04-26T12:00:00Z",
+      "latestRunId": "run_abc123",
+      "artifactKinds": ["report", "summary", "checklist"],
+      "evidencePolicy": "cite-sources",
+      "freshnessLabel": "fresh",
+      "sourceSnapshot": "Collections frozen after identity-core ingest.",
+      "runtimeAttachmentPolicy": "attach-on-demand",
+      "notesMarkdown": "Use for desktop auth and identity planning.",
+      "artifactPaths": ["/home/jake/.shad/history/Runs/run_abc123/final.report.md"]
+    }
+  ]
+}
+```
+
+## For users
+
+If you are using a surface like Edwin Desktop, the practical meaning is:
+
+- **Sources** tell you what material is available.
+- **Disciplines** tell you how that material has been curated.
+- **Runs** let you inspect what Edwin already did with it.
+
+If the Knowledge view is empty, usually one of these is true:
+
+- no Shad sources have been configured yet
+- no Shad runs exist yet
+- `~/.edwinpai/knowledge/disciplines.json` has not been created yet
+- QMD is not installed or not visible on `PATH`
+
+## For other Edwins and developers
+
+When another Edwin or tool needs to reason about Knowledge, the safest mental model is:
+
+- treat **sources** as raw intake
+- treat **disciplines** as curated runtime metadata
+- treat **runs** as evidence and synthesis history
+- do not assume the discipline registry is the same thing as the source-of-truth collection store
+
+In other words: Knowledge is not one file and not one index. It is a composed system.
+
+## See also
+
+- [Knowledge](/concepts/knowledge)
+- [Memory System](/concepts/memory)
+- [Agent workspace](/concepts/agent-workspace)

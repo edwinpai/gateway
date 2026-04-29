@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SMOKE_IMAGE="${EDWINPAI_INSTALL_SMOKE_IMAGE:-${OPENCLAW_INSTALL_SMOKE_IMAGE:-${CLAWDBOT_INSTALL_SMOKE_IMAGE:-edwinpai-install-smoke:local}}}"
+NONROOT_IMAGE="${EDWINPAI_INSTALL_NONROOT_IMAGE:-${OPENCLAW_INSTALL_NONROOT_IMAGE:-${CLAWDBOT_INSTALL_NONROOT_IMAGE:-edwinpai-install-nonroot:local}}}"
+INSTALL_URL="${EDWINPAI_INSTALL_URL:-${OPENCLAW_INSTALL_URL:-${CLAWDBOT_INSTALL_URL:-https://edwinpai.com/install.sh}}}"
+CLI_INSTALL_URL="${EDWINPAI_INSTALL_CLI_URL:-${OPENCLAW_INSTALL_CLI_URL:-${CLAWDBOT_INSTALL_CLI_URL:-https://edwinpai.com/install-cli.sh}}}"
+SKIP_NONROOT="${EDWINPAI_INSTALL_SMOKE_SKIP_NONROOT:-${OPENCLAW_INSTALL_SMOKE_SKIP_NONROOT:-${CLAWDBOT_INSTALL_SMOKE_SKIP_NONROOT:-0}}}"
+LOCAL_REPO_MODE="${EDWINPAI_INSTALL_LOCAL_REPO:-${OPENCLAW_INSTALL_LOCAL_REPO:-${CLAWDBOT_INSTALL_LOCAL_REPO:-0}}}"
+OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+LATEST_DIR="$(mktemp -d)"
+LATEST_FILE="${LATEST_DIR}/latest"
+LOCAL_MOUNT_ARGS=()
+RUN_INSTALL_SCRIPT_PATH="${EDWINPAI_INSTALL_SCRIPT_PATH:-${OPENCLAW_INSTALL_SCRIPT_PATH:-}}"
+RUN_EXPECT_CLI="${EDWINPAI_INSTALL_EXPECT_CLI:-${OPENCLAW_INSTALL_EXPECT_CLI:-}}"
+RUN_EXPECT_VERSION="${EDWINPAI_INSTALL_EXPECT_VERSION:-${OPENCLAW_INSTALL_EXPECT_VERSION:-}}"
+
+if [[ "$LOCAL_REPO_MODE" == "1" ]]; then
+  LOCAL_MOUNT_ARGS=(-v "$ROOT_DIR:/repo")
+  RUN_INSTALL_SCRIPT_PATH="/repo/install.sh"
+  RUN_EXPECT_CLI="${RUN_EXPECT_CLI:-edwinpai}"
+  RUN_EXPECT_VERSION="${RUN_EXPECT_VERSION:-$(node -p "require(process.argv[1]).version" "$ROOT_DIR/package.json")}"
+fi
+
+echo "==> Build smoke image (upgrade, root): $SMOKE_IMAGE"
+docker build \
+  -t "$SMOKE_IMAGE" \
+  -f "$ROOT_DIR/scripts/docker/install-sh-smoke/Dockerfile" \
+  "$ROOT_DIR/scripts/docker/install-sh-smoke"
+
+echo "==> Run installer smoke test (root): $INSTALL_URL"
+docker run --rm -t \
+  "${LOCAL_MOUNT_ARGS[@]}" \
+  -v "${LATEST_DIR}:/out" \
+  -e EDWINPAI_INSTALL_URL="$INSTALL_URL" \
+  -e EDWINPAI_INSTALL_SCRIPT_PATH="$RUN_INSTALL_SCRIPT_PATH" \
+  -e EDWINPAI_INSTALL_EXPECT_CLI="$RUN_EXPECT_CLI" \
+  -e EDWINPAI_INSTALL_EXPECT_VERSION="$RUN_EXPECT_VERSION" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e EDWINPAI_INSTALL_LATEST_OUT="/out/latest" \
+  -e EDWINPAI_INSTALL_SMOKE_PREVIOUS="${EDWINPAI_INSTALL_SMOKE_PREVIOUS:-${OPENCLAW_INSTALL_SMOKE_PREVIOUS:-${CLAWDBOT_INSTALL_SMOKE_PREVIOUS:-}}}" \
+  -e EDWINPAI_INSTALL_SMOKE_SKIP_PREVIOUS="${EDWINPAI_INSTALL_SMOKE_SKIP_PREVIOUS:-${OPENCLAW_INSTALL_SMOKE_SKIP_PREVIOUS:-${CLAWDBOT_INSTALL_SMOKE_SKIP_PREVIOUS:-0}}}" \
+  -e EDWINPAI_NO_ONBOARD=1 \
+  -e CI=1 \
+  -e NONINTERACTIVE=1 \
+  -e DEBIAN_FRONTEND=noninteractive \
+  "$SMOKE_IMAGE"
+
+LATEST_VERSION=""
+if [[ -f "$LATEST_FILE" ]]; then
+  LATEST_VERSION="$(cat "$LATEST_FILE")"
+fi
+
+if [[ "$SKIP_NONROOT" == "1" ]]; then
+  echo "==> Skip non-root installer smoke (EDWINPAI_INSTALL_SMOKE_SKIP_NONROOT=1)"
+else
+  echo "==> Build non-root image: $NONROOT_IMAGE"
+  docker build \
+    -t "$NONROOT_IMAGE" \
+    -f "$ROOT_DIR/scripts/docker/install-sh-nonroot/Dockerfile" \
+    "$ROOT_DIR/scripts/docker/install-sh-nonroot"
+
+  echo "==> Run installer non-root test: $INSTALL_URL"
+  NONROOT_EXPECT_VERSION="$LATEST_VERSION"
+  if [[ -z "$NONROOT_EXPECT_VERSION" ]]; then
+    NONROOT_EXPECT_VERSION="$RUN_EXPECT_VERSION"
+  fi
+  docker run --rm -t \
+    "${LOCAL_MOUNT_ARGS[@]}" \
+    -e EDWINPAI_INSTALL_URL="$INSTALL_URL" \
+    -e EDWINPAI_INSTALL_SCRIPT_PATH="$RUN_INSTALL_SCRIPT_PATH" \
+    -e EDWINPAI_INSTALL_EXPECT_CLI="$RUN_EXPECT_CLI" \
+    -e EDWINPAI_INSTALL_EXPECT_VERSION="$NONROOT_EXPECT_VERSION" \
+    -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+    -e EDWINPAI_NO_ONBOARD=1 \
+    -e CI=1 \
+    -e NONINTERACTIVE=1 \
+    -e DEBIAN_FRONTEND=noninteractive \
+    "$NONROOT_IMAGE"
+fi
+
+if [[ "${EDWINPAI_INSTALL_SMOKE_SKIP_CLI:-${OPENCLAW_INSTALL_SMOKE_SKIP_CLI:-${CLAWDBOT_INSTALL_SMOKE_SKIP_CLI:-0}}}" == "1" ]]; then
+  echo "==> Skip CLI installer smoke (EDWINPAI_INSTALL_SMOKE_SKIP_CLI=1)"
+  exit 0
+fi
+
+if [[ "$SKIP_NONROOT" == "1" ]]; then
+  echo "==> Skip CLI installer smoke (non-root image skipped)"
+  exit 0
+fi
+
+echo "==> Run CLI installer non-root test (same image)"
+docker run --rm -t \
+  --entrypoint /bin/bash \
+  -e EDWINPAI_INSTALL_URL="$INSTALL_URL" \
+  -e EDWINPAI_INSTALL_SCRIPT_PATH="$RUN_INSTALL_SCRIPT_PATH" \
+  -e EDWINPAI_INSTALL_EXPECT_CLI="$RUN_EXPECT_CLI" \
+  -e EDWINPAI_INSTALL_EXPECT_VERSION="$RUN_EXPECT_VERSION" \
+  -e EDWINPAI_INSTALL_CLI_URL="$CLI_INSTALL_URL" \
+  -e EDWINPAI_NO_ONBOARD=1 \
+  -e CI=1 \
+  -e NONINTERACTIVE=1 \
+  -e DEBIAN_FRONTEND=noninteractive \
+  "$NONROOT_IMAGE" -lc "curl -fsSL \"$CLI_INSTALL_URL\" | bash -s -- --set-npm-prefix --no-onboard"

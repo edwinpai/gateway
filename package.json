@@ -1,0 +1,246 @@
+{
+  "name": "@edwinpai/edwinpai",
+  "version": "1.0.0-beta.2",
+  "private": true,
+  "description": "EdwinPAI — Personal AI agent framework with cryptographic security",
+  "keywords": [],
+  "license": "BSL-1.1",
+  "author": "",
+  "bin": {
+    "edwinpai": "edwinpai.mjs"
+  },
+  "files": [
+    "assets/",
+    "CHANGELOG.md",
+    "dist/",
+    "docs/",
+    "extensions/",
+    "LICENSE",
+    "edwinpai.mjs",
+    "README-header.png",
+    "README.md",
+    "skills/"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "typesVersions": {
+    "*": {
+      "plugin-sdk": [
+        "src/plugin-sdk/index.ts"
+      ],
+      "*": [
+        "dist/*"
+      ]
+    }
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./plugin-sdk": "./dist/plugin-sdk/index.js",
+    "./cli-entry": "./edwinpai.mjs"
+  },
+  "scripts": {
+    "build": "pnpm canvas:a2ui:bundle && tsdown && node --import tsx scripts/canvas-a2ui-copy.ts && node --import tsx scripts/copy-hook-metadata.ts && node --import tsx scripts/write-build-info.ts && node --import tsx scripts/write-cli-compat.ts",
+    "canvas:a2ui:bundle": "bash scripts/bundle-a2ui.sh",
+    "check": "pnpm tsgo && pnpm lint && pnpm format",
+    "check:launch-followup": "pnpm exec vitest run src/agents/edwinpai-tools.subagents.sessions-spawn-allowed-collections.test.ts src/commands/doctor-knowledge.test.ts src/commands/onboard-non-interactive.openai-api-key.test.ts src/daemon/service-audit.test.ts src/daemon/service-env.test.ts && bash -n install.sh scripts/test-install-sh-docker.sh scripts/docker/install-sh-smoke/run.sh scripts/docker/install-sh-nonroot/run.sh",
+    "check:loc": "node --import tsx scripts/check-ts-max-loc.ts --max 500",
+    "check:protected-cores": "pnpm --dir packages/identity-core build && pnpm --dir packages/shad-core build && pnpm build && pnpm release:check && pnpm exec vitest run src/identity-core.boundary.test.ts src/identity-core.native-loader.test.ts src/identity-core-artifact-sync.test.ts src/identity-core-base-package-prep.test.ts src/identity-core-platform-package-prep.test.ts src/memory/shad-core-package-seam.boundary.test.ts src/shad-core.boundary.test.ts",
+    "dev": "node scripts/run-node.mjs",
+    "docs:bin": "node scripts/build-docs-list.mjs",
+    "docs:build": "cd docs && pnpm dlx --reporter append-only mint broken-links",
+    "docs:dev": "cd docs && mint dev",
+    "docs:list": "node scripts/docs-list.js",
+    "edwinpai": "node scripts/run-node.mjs",
+    "edwinpai:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
+    "format": "oxfmt --check",
+    "format:all": "pnpm format",
+    "format:fix": "oxfmt --write",
+    "gateway:dev": "EDWINPAI_SKIP_CHANNELS=1 node scripts/run-node.mjs --dev gateway",
+    "gateway:dev:reset": "EDWINPAI_SKIP_CHANNELS=1 node scripts/run-node.mjs --dev gateway --reset",
+    "gateway:watch": "node scripts/watch-node.mjs gateway --force",
+    "lint": "oxlint --type-aware",
+    "lint:all": "pnpm lint",
+    "lint:fix": "oxlint --type-aware --fix && pnpm format:fix",
+    "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
+    "prepack": "pnpm build && pnpm ui:build",
+    "prepare": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",
+    "protocol:check": "pnpm protocol:gen && git diff --exit-code -- dist/protocol.schema.json",
+    "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
+    "release:check": "pnpm --dir packages/identity-core build && node --import tsx scripts/release-check.ts",
+    "security:all": "pnpm security:verify-deps && pnpm security:audit-crypto && pnpm security:generate-sbom",
+    "security:audit-crypto": "node --import tsx scripts/audit-crypto.ts",
+    "security:generate-sbom": "node --import tsx scripts/generate-sbom.ts",
+    "security:verify-deps": "node --import tsx scripts/verify-deps.ts",
+    "start": "node scripts/run-node.mjs",
+    "test": "node scripts/test-parallel.mjs",
+    "test:all": "pnpm lint && pnpm build && pnpm test && pnpm test:e2e && pnpm test:live && pnpm test:docker:all",
+    "test:coverage": "vitest run --coverage",
+    "test:docker:all": "pnpm test:docker:live-models && pnpm test:docker:live-gateway && pnpm test:docker:onboard && pnpm test:docker:gateway-network && pnpm test:docker:qr && pnpm test:docker:doctor-switch && pnpm test:docker:plugins && pnpm test:docker:cleanup",
+    "test:docker:cleanup": "bash scripts/test-cleanup-docker.sh",
+    "test:docker:doctor-switch": "bash scripts/e2e/doctor-install-switch-docker.sh",
+    "test:docker:gateway-network": "bash scripts/e2e/gateway-network-docker.sh",
+    "test:docker:live-gateway": "bash scripts/test-live-gateway-models-docker.sh",
+    "test:docker:live-models": "bash scripts/test-live-models-docker.sh",
+    "test:docker:onboard": "bash scripts/e2e/onboard-docker.sh",
+    "test:docker:plugins": "bash scripts/e2e/plugins-docker.sh",
+    "test:docker:qr": "bash scripts/e2e/qr-import-docker.sh",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:force": "node --import tsx scripts/test-force.ts",
+    "test:install:e2e": "bash scripts/test-install-sh-e2e-docker.sh",
+    "test:install:e2e:anthropic": "EDWINPAI_E2E_MODELS=anthropic bash scripts/test-install-sh-e2e-docker.sh",
+    "test:install:e2e:openai": "EDWINPAI_E2E_MODELS=openai bash scripts/test-install-sh-e2e-docker.sh",
+    "test:install:smoke": "bash scripts/test-install-sh-docker.sh",
+    "test:live": "EDWINPAI_LIVE_TEST=1 vitest run --config vitest.live.config.ts",
+    "test:ui": "pnpm --dir ui test",
+    "test:watch": "vitest",
+    "tui": "node scripts/run-node.mjs tui",
+    "tui:dev": "EDWINPAI_PROFILE=dev node scripts/run-node.mjs --dev tui",
+    "ui:build": "node scripts/ui.js build",
+    "ui:dev": "node scripts/ui.js dev",
+    "ui:install": "node scripts/ui.js install"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "0.13.1",
+    "@aws-sdk/client-bedrock": "^3.981.0",
+    "@bsv/sdk": "2.0.1",
+    "@buape/carbon": "0.14.0",
+    "@clack/prompts": "^1.0.0",
+    "@grammyjs/runner": "^2.0.3",
+    "@grammyjs/transformer-throttler": "^1.2.1",
+    "@homebridge/ciao": "^1.3.4",
+    "@larksuiteoapi/node-sdk": "^1.42.0",
+    "@line/bot-sdk": "^10.6.0",
+    "@lydell/node-pty": "1.2.0-beta.3",
+    "@mariozechner/pi-agent-core": "0.66.1",
+    "@mariozechner/pi-ai": "0.66.1",
+    "@mariozechner/pi-coding-agent": "0.66.1",
+    "@mariozechner/pi-tui": "0.66.1",
+    "@mozilla/readability": "^0.6.0",
+    "@noble/hashes": "1.3.0",
+    "@noble/secp256k1": "1.7.1",
+    "@sinclair/typebox": "0.34.48",
+    "@slack/bolt": "^4.6.0",
+    "@slack/web-api": "^7.13.0",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "ajv": "^8.17.1",
+    "chalk": "^5.6.2",
+    "chokidar": "^5.0.0",
+    "cli-highlight": "^2.1.11",
+    "commander": "^14.0.3",
+    "croner": "^10.0.1",
+    "discord-api-types": "^0.38.38",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "file-type": "^21.3.0",
+    "grammy": "^1.39.3",
+    "hono": "4.11.7",
+    "jiti": "^2.6.1",
+    "json5": "^2.2.3",
+    "jszip": "^3.10.1",
+    "linkedom": "^0.18.12",
+    "long": "^5.3.2",
+    "markdown-it": "^14.1.0",
+    "node-edge-tts": "^1.2.9",
+    "osc-progress": "^0.3.0",
+    "pdfjs-dist": "^5.4.624",
+    "playwright-core": "1.58.1",
+    "proper-lockfile": "^4.1.2",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.34.5",
+    "signal-utils": "^0.21.1",
+    "sqlite-vec": "0.1.7-alpha.2",
+    "tar": "7.5.8",
+    "tslog": "^4.10.2",
+    "undici": "^7.20.0",
+    "ws": "^8.19.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@grammyjs/types": "^3.23.0",
+    "@lit-labs/signals": "^0.2.0",
+    "@lit/context": "^1.1.6",
+    "@types/express": "^5.0.6",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^25.2.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/ws": "^8.18.1",
+    "@typescript/native-preview": "7.0.0-dev.20260202.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "lit": "^3.3.2",
+    "ollama": "^0.6.3",
+    "oxfmt": "0.28.0",
+    "oxlint": "^1.43.0",
+    "oxlint-tsgolint": "^0.11.4",
+    "rolldown": "1.0.0-rc.2",
+    "tsdown": "^0.20.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@napi-rs/canvas": "^0.1.89",
+    "node-llama-cpp": "3.15.1"
+  },
+  "overrides": {
+    "tar": "7.5.8"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@10.23.0",
+  "pnpm": {
+    "minimumReleaseAge": 2880,
+    "overrides": {
+      "fast-xml-parser": "5.3.4",
+      "form-data": "2.5.4",
+      "@hono/node-server>hono": "4.11.7",
+      "hono": "4.11.7",
+      "qs": "6.14.1",
+      "@sinclair/typebox": "0.34.47",
+      "tar": "7.5.8",
+      "tough-cookie": "4.1.3"
+    },
+    "onlyBuiltDependencies": [
+      "@lydell/node-pty",
+      "@matrix-org/matrix-sdk-crypto-nodejs",
+      "@napi-rs/canvas",
+      "@whiskeysockets/baileys",
+      "authenticate-pam",
+      "esbuild",
+      "node-llama-cpp",
+      "protobufjs",
+      "sharp"
+    ]
+  },
+  "vitest": {
+    "coverage": {
+      "provider": "v8",
+      "reporter": [
+        "text",
+        "lcov"
+      ],
+      "thresholds": {
+        "lines": 70,
+        "functions": 70,
+        "branches": 70,
+        "statements": 70
+      },
+      "include": [
+        "src/**/*.ts"
+      ],
+      "exclude": [
+        "src/**/*.test.ts"
+      ]
+    },
+    "include": [
+      "src/**/*.test.ts"
+    ],
+    "exclude": [
+      "dist/**",
+      "**/vendor/**",
+      "dist/EdwinPAI.app/**"
+    ]
+  }
+}

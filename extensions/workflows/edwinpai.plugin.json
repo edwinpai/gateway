@@ -1,0 +1,10 @@
+{
+  "id": "workflows",
+  "name": "Workflows",
+  "description": "Deterministic workflow engine for Edwin - run typed, resumable pipelines for automation tasks",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

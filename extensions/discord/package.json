@@ -1,0 +1,14 @@
+{
+  "name": "@edwinpai/discord",
+  "version": "1.0.0-beta.2",
+  "description": "EdwinPAI Discord channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "@edwinpai/edwinpai": "workspace:*"
+  },
+  "edwinpai": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

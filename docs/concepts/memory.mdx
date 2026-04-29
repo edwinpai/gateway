@@ -1,0 +1,273 @@
+---
+title: "Memory System"
+description: "How Edwin indexes, retrieves, and consolidates long-term memory across conversations."
+---
+
+Edwin's memory system gives agents persistent, searchable context that survives across conversations. It combines full-text search, vector embeddings, and LLM-driven consolidation so that every new conversation feels like a continuation of the last one — even when the context window has been fully reset.
+
+## Architecture overview
+
+The memory system is organized into four layers that work together:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Shad Context Plugin                                 │
+│  Task routing, semantic caching, context injection   │
+└────────────────────────┬─────────────────────────────┘
+                         │
+┌────────────────────────▼─────────────────────────────┐
+│  Memory Backend (QMD Manager)                        │
+│  Collection management, scheduling, score blending   │
+└────────────────────────┬─────────────────────────────┘
+                         │
+┌────────────────────────▼─────────────────────────────┐
+│  QMD Search Engine                                   │
+│  BM25, vector search, hybrid RRF fusion              │
+└────────────────────────┬─────────────────────────────┘
+                         │
+┌────────────────────────▼─────────────────────────────┐
+│  Storage                                             │
+│  SQLite FTS5, sqlite-vec, markdown collections       │
+└──────────────────────────────────────────────────────┘
+```
+
+**Shad Context** handles the retrieval pipeline — routing queries, caching results, and injecting context into the agent's system prompt. **QMD Manager** orchestrates indexing, embedding, and consolidation schedules. **QMD** is the underlying search engine that stores everything in a SQLite database with both full-text and vector indexes. **Collections** are directories of markdown files that QMD indexes.
+
+## QMD search engine
+
+QMD (Query Markup Documents) is a hybrid search engine that combines three retrieval strategies:
+
+| Mode       | How it works                                                                            | Speed  | When to use                                |
+| ---------- | --------------------------------------------------------------------------------------- | ------ | ------------------------------------------ |
+| **BM25**   | Full-text keyword search via SQLite FTS5                                                | ~50ms  | Always available, no external dependencies |
+| **Vector** | Semantic similarity via OpenAI `text-embedding-3-small` embeddings stored in sqlite-vec | ~200ms | When `OPENAI_API_KEY` is set               |
+| **Hybrid** | Both modes combined via Reciprocal Rank Fusion (RRF)                                    | ~250ms | Default when embeddings are available      |
+
+### Collections
+
+Collections are named groups of files that QMD indexes. Edwin automatically creates collections for:
+
+- **memory** — workspace memory files (`memory/**/*.md`, `MEMORY.md`)
+- **sessions** — exported session transcripts from past conversations
+- **custom** — any additional paths configured in `config.memory.qmd.paths`
+
+Each collection maps to a directory with a glob pattern. QMD scans these on a schedule and updates its index when files change.
+
+### Indexing vs. embedding
+
+These are two independent operations:
+
+- **`qmd update`** refreshes the BM25 full-text index. It runs in about 1 second and is the foundation for keyword search.
+- **`qmd embed`** generates vector embeddings by calling the OpenAI API. It can take 5-60 seconds depending on how much content has changed.
+
+For service-safe setups, prefer putting `OPENAI_API_KEY` in `~/.edwinpai/.env` (loaded by both the CLI and the daemon) or setting `memory.qmd.embeddingApiKey` in config, rather than relying on shell-only exports like `.profile` or `.zshrc`.
+
+Indexing and embedding run on separate schedules so that embedding latency never blocks search or replies. See [Async embedding](#async-embedding) below.
+
+## Retrieval pipeline
+
+When a message arrives, the shad-context plugin runs a multi-stage retrieval pipeline before the agent sees the prompt.
+
+### Task routing
+
+A lightweight heuristic classifier (no LLM calls, less than 1ms) routes each prompt into one of three lanes:
+
+<AccordionGroup>
+  <Accordion title="Fast lane — skip retrieval">
+    Triggers on system commands (`/compact`, `/status`), casual greetings (`hi`, `thanks`, `ok`),
+    and very short messages with no question signal. The agent runs without injected context.
+  </Accordion>
+  <Accordion title="Recall lane — BM25 search">
+    The default lane. Triggers on questions, reference patterns (`what did we...`, `remind me...`,
+    `status of...`), and most substantive messages. Runs a QMD search and injects the top results as
+    context. Typical latency: 1-2 seconds.
+  </Accordion>
+  <Accordion title="Deep lane — multi-query synthesis">
+    Opt-in only (`deepWorkflowEnabled: true`). Triggers on research-oriented prompts (`analyze`,
+    `compare`, `deep dive`). Decomposes the query into multiple searches, gathers results, and
+    synthesizes them via an LLM call. Typical latency: 5-15 seconds.
+  </Accordion>
+</AccordionGroup>
+
+### Semantic cache
+
+Before running a search, the plugin checks a semantic cache backed by SQLite and sqlite-vec. If a previous query with high embedding similarity (default threshold: 0.92 cosine) has a cached result, it's returned immediately — skipping the search entirely.
+
+The cache supports two hit levels:
+
+- **Hard hit** (similarity >= 0.92): returned directly
+- **Soft hit** (similarity 0.85-0.92): returned with a similarity warning so the agent knows the context may not be an exact match
+
+Cache entries expire after 24 hours and are invalidated when source files change.
+
+### Fallback chain
+
+The retrieval pipeline uses a multi-level fallback:
+
+1. Semantic cache hit — return cached result
+2. QMD-direct search via the memory manager — preferred for speed
+3. Shad CLI subprocess — fallback when QMD is unavailable
+4. No context — agent runs without injected memory
+
+Results are wrapped in `<collection-context>` tags and prepended to the agent's system prompt.
+
+## Score blending
+
+Raw search scores are blended with temporal and access-frequency signals before ranking:
+
+```
+final_score = (1 - α) * relevance_score + α * temporal_score + frequency_boost
+```
+
+| Signal              | How it works                                      | Default weight  |
+| ------------------- | ------------------------------------------------- | --------------- |
+| **Relevance**       | BM25 or hybrid RRF score from QMD                 | 80% (`1 - α`)   |
+| **Temporal decay**  | Exponential decay with 30-day half-life           | 20% (`α = 0.2`) |
+| **Frequency boost** | Logarithmic boost based on access count (max 0.1) | Additive        |
+
+This means recent, frequently-accessed memories rank higher than old, rarely-touched ones — even if the keyword match is slightly weaker.
+
+## Auto-capture
+
+After each agent turn, the `agent_end` hook writes a session summary to the collection:
+
+1. User messages and recent assistant responses are extracted from the conversation
+2. A timestamped markdown summary is appended to `sessions/<date>-<session-key>.md`
+3. A background `qmd update` + `qmd embed` re-indexes the new content
+
+This means past conversations are automatically searchable in future sessions without any manual effort.
+
+## Async embedding
+
+Embedding is decoupled from indexing and runs on a hybrid schedule that balances freshness with efficiency.
+
+### How it works
+
+After each `qmd update` (BM25 refresh), the manager evaluates whether an embed run should be triggered based on three conditions:
+
+| Condition           | Default      | Description                                                            |
+| ------------------- | ------------ | ---------------------------------------------------------------------- |
+| **Token threshold** | 5,000 tokens | Triggered when enough new content has accumulated since the last embed |
+| **Time ceiling**    | 30 minutes   | Triggered if too much time has passed, even without enough new tokens  |
+| **Time floor**      | 2 minutes    | Prevents back-to-back embed runs during bursty conversations           |
+
+Embed runs asynchronously in the background. Search never waits on embedding — it uses whatever embeddings exist, with BM25 carrying recall in the interim.
+
+### Token tracking
+
+The `message_sent` hook estimates token count from message length and feeds it to the embed scheduler. This means the embed schedule adapts to conversation activity: heavy sessions trigger more frequent embeds, quiet periods don't waste API calls.
+
+### Pre-compaction flush
+
+The `before_compaction` hook triggers an immediate BM25 index refresh before the context window is compressed. This ensures that all session content captured so far is searchable from the next conversation, even if the context window is fully reset.
+
+## Consolidation
+
+The "dreamer" pattern periodically consolidates episodic memories (detailed session transcripts) into semantic knowledge (concise factual summaries).
+
+### Memory tiers
+
+| Tier           | Description                                           | Lifecycle                                   |
+| -------------- | ----------------------------------------------------- | ------------------------------------------- |
+| **Episodic**   | Timestamped session transcripts with full detail      | Created automatically via auto-capture      |
+| **Semantic**   | Consolidated facts synthesized from multiple episodes | Created by the dreamer during consolidation |
+| **Procedural** | Learned behavioral rules and preferences              | Created from user feedback patterns         |
+
+### How consolidation works
+
+1. **Filter**: select episodic memories older than 7 days
+2. **Group**: cluster by embedding similarity (threshold: 0.75)
+3. **Synthesize**: for each cluster, call an LLM to produce a concise factual summary
+4. **Promote**: mark originals as consolidated, write the summary as a new semantic memory
+
+Consolidation is non-destructive — original episodic records are preserved and marked with references to the consolidated output.
+
+### Triggering
+
+Consolidation can be triggered by:
+
+- A periodic interval (disabled by default, configurable via `consolidate.interval`)
+- Reaching 10 successful index updates since the last consolidation
+- Exceeding 200 total indexed documents
+- Manually via `qmd consolidate`
+
+## Configuration
+
+### Memory backend
+
+```yaml
+memory:
+  backend: qmd # "qmd" (default) or "builtin"
+  citations: auto # "auto", "on", or "off"
+  qmd:
+    includeDefaultMemory: true
+    paths:
+      - path: ~/shared-docs
+        pattern: "**/*.md"
+        name: shared
+    sessions:
+      enabled: true
+      retentionDays: 30
+    update:
+      interval: 5m
+      debounceMs: 15000
+      onBoot: true
+      embedInterval: 60m
+      embedMinIntervalMs: 120000 # 2 minutes
+      embedMaxIntervalMs: 1800000 # 30 minutes
+      embedTokenThreshold: 5000
+    consolidate:
+      interval: "0" # disabled by default
+      onBoot: false
+    limits:
+      maxResults: 6
+      maxSnippetChars: 700
+      maxInjectedChars: 4000
+      timeoutMs: 4000
+```
+
+### Shad context plugin
+
+Configure the retrieval and caching layer in your Edwin config under `extensions.shad-context`:
+
+```json
+{
+  "collectionPaths": ["~/clawd"],
+  "searchMode": "hybrid",
+  "maxChars": 6000,
+  "limit": 8,
+  "autoRecall": true,
+  "autoCapture": true,
+  "routerEnabled": true,
+  "semanticCacheEnabled": true,
+  "semanticCacheThreshold": 0.92,
+  "deepWorkflowEnabled": false
+}
+```
+
+Key options:
+
+| Option                   | Default                     | Description                                  |
+| ------------------------ | --------------------------- | -------------------------------------------- |
+| `collectionPaths`        | `["~/.edwinpai/workspace"]` | Directories to index and search              |
+| `searchMode`             | `"hybrid"`                  | `"hybrid"`, `"bm25"`, or `"vector"`          |
+| `maxChars`               | `6000`                      | Max characters injected into context         |
+| `autoRecall`             | `true`                      | Enable automatic context retrieval           |
+| `autoCapture`            | `true`                      | Enable automatic session capture             |
+| `routerEnabled`          | `true`                      | Enable task routing (fast/recall/deep lanes) |
+| `semanticCacheEnabled`   | `true`                      | Enable embedding-similarity cache            |
+| `semanticCacheThreshold` | `0.92`                      | Cosine similarity for hard cache hits        |
+| `deepWorkflowEnabled`    | `false`                     | Enable deep research lane (opt-in)           |
+
+## Hook integration
+
+The memory system integrates with Edwin's plugin hook lifecycle. These hooks fire in both CLI (Claude Code) and API modes:
+
+| Hook                 | Purpose                               | Blocking?            |
+| -------------------- | ------------------------------------- | -------------------- |
+| `before_agent_start` | Retrieve and inject context           | Yes (sequential)     |
+| `agent_end`          | Capture session summary + reindex     | No (fire-and-forget) |
+| `before_compaction`  | Flush BM25 index before context reset | Yes (sequential)     |
+| `message_sent`       | Track tokens for embed scheduling     | No (fire-and-forget) |
+
+The `before_compaction` hook is especially important for CLI usage where compaction happens inside the harness. It ensures that no context is lost when the conversation window is compressed — the BM25 index is always up to date before a reset.

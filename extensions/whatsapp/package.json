@@ -1,0 +1,14 @@
+{
+  "name": "@edwinpai/whatsapp",
+  "version": "1.0.0-beta.2",
+  "description": "EdwinPAI WhatsApp channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "@edwinpai/edwinpai": "workspace:*"
+  },
+  "edwinpai": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

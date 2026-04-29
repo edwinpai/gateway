@@ -1,0 +1,14 @@
+{
+  "name": "@edwinpai/shad-context",
+  "version": "1.0.0-beta.2",
+  "description": "Auto-inject vault context via Shad retrieval + synthesis, with task routing and semantic caching",
+  "type": "module",
+  "devDependencies": {
+    "@edwinpai/edwinpai": "workspace:*"
+  },
+  "edwinpai": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

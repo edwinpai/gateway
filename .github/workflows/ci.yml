@@ -1,0 +1,384 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  install-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Runtime versions
+        run: |
+          node -v
+          npm -v
+          pnpm -v
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies (frozen)
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          which node
+          node -v
+          pnpm -v
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+  checks:
+    runs-on: ubuntu-24.04
+    continue-on-error: ${{ matrix.advisory == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: node
+            task: tsgo
+            command: pnpm tsgo
+            advisory: true
+          - runtime: node
+            task: launch-followup
+            command: pnpm check:launch-followup
+          - runtime: node
+            task: protected-cores
+            command: pnpm check:protected-cores
+          - runtime: node
+            task: build
+            command: pnpm build
+          - runtime: node
+            task: lint
+            command: pnpm lint
+            advisory: true
+          - runtime: node
+            task: test
+            command: pnpm build && pnpm canvas:a2ui:bundle && pnpm test
+            advisory: true
+          - runtime: node
+            task: protocol
+            command: pnpm protocol:check
+          - runtime: node
+            task: format
+            command: pnpm format
+          - runtime: bun
+            task: test
+            command: pnpm build && pnpm canvas:a2ui:bundle && bunx vitest run
+            advisory: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Runtime versions
+        run: |
+          node -v
+          npm -v
+          bun -v
+          pnpm -v
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          which node
+          node -v
+          pnpm -v
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true || pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
+        env:
+          MATRIX_COMMAND: ${{ matrix.command }}
+          MATRIX_ADVISORY: ${{ matrix.advisory || false }}
+        run: |
+          set +e
+          bash -lc "$MATRIX_COMMAND"
+          code=$?
+          if [[ "$MATRIX_ADVISORY" == "true" && $code -ne 0 ]]; then
+            echo "::warning::Advisory CI lane '${{ matrix.task }}' failed with exit code $code; preserving logs without failing the release gate."
+            exit 0
+          fi
+          exit $code
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install detect-secrets
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install detect-secrets==1.5.0
+
+      - name: Detect secrets
+        run: |
+          if ! detect-secrets scan --baseline .secrets.baseline; then
+            echo "::error::Secret scanning failed. See docs/gateway/security.md#secret-scanning-detect-secrets"
+            exit 1
+          fi
+
+  checks-windows:
+    runs-on: windows-latest
+    continue-on-error: ${{ matrix.advisory == true }}
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CLAWDBOT_TEST_WORKERS: 1
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: node
+            task: build
+            command: pnpm build
+          - runtime: node
+            task: lint
+            command: pnpm lint
+            advisory: true
+          - runtime: node
+            task: test
+            command: pnpm build && pnpm canvas:a2ui:bundle && pnpm test
+            advisory: true
+          - runtime: node
+            task: protocol
+            command: pnpm protocol:check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Runtime versions
+        run: |
+          node -v
+          npm -v
+          bun -v
+          pnpm -v
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          which node
+          node -v
+          pnpm -v
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true || pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
+        env:
+          MATRIX_COMMAND: ${{ matrix.command }}
+          MATRIX_ADVISORY: ${{ matrix.advisory || false }}
+        run: |
+          set +e
+          bash -lc "$MATRIX_COMMAND"
+          code=$?
+          if [[ "$MATRIX_ADVISORY" == "true" && $code -ne 0 ]]; then
+            echo "::warning::Advisory CI lane '${{ matrix.task }}' failed with exit code $code; preserving logs without failing the release gate."
+            exit 0
+          fi
+          exit $code
+
+  checks-macos:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: test
+            command: pnpm test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup pnpm (corepack retry)
+        run: |
+          set -euo pipefail
+          corepack enable
+          for attempt in 1 2 3; do
+            if corepack prepare pnpm@10.23.0 --activate; then
+              pnpm -v
+              exit 0
+            fi
+            echo "corepack prepare failed (attempt $attempt/3). Retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Runtime versions
+        run: |
+          node -v
+          npm -v
+          pnpm -v
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          which node
+          node -v
+          pnpm -v
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true || pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Run ${{ matrix.task }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: ${{ matrix.command }}
