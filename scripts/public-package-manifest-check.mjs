@@ -123,6 +123,8 @@ function checkWrapperShape(pkg) {
     }
   }
   if (exists("packages")) fail("public wrapper export must not include packages/");
+  if (exists("pnpm-workspace.yaml")) fail("public wrapper export must not include pnpm-workspace.yaml");
+  if (exists("pnpm-lock.yaml")) fail("public wrapper export must not include stale private pnpm-lock.yaml");
 }
 
 const pkg = readJson(packagePath);

@@ -55,6 +55,8 @@ RSYNC_ARGS=(
   --exclude '/.secrets.baseline'
   --exclude '/node_modules/'
   --exclude '/**/node_modules/'
+  --exclude '/pnpm-lock.yaml'
+  --exclude '/pnpm-workspace.yaml'
   --exclude '/dist/'
   --exclude '/**/dist/'
   --exclude '/.tmp/'
@@ -312,7 +314,7 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build sanitized gateway package
         run: pnpm build
