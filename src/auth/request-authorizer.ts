@@ -11,10 +11,10 @@
  * @see SECURITY-MITIGATIONS-v2.md
  */
 
-import type { IdentityCore } from "../../packages/identity-core/src/types.js";
+import type { IdentityCore } from "@edwinpai/identity-core";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import type { SignedPrompt, SignedRequest } from "../types/bsv-auth.js";
 import type { TimingMonitor, TimingVerdict } from "./timing-monitor.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 import { canonicalizeRequest, canonicalizeSignedPrompt } from "../types/bsv-auth.js";
 import { verifySignatureUnified, sha256 } from "./verification.js";
 

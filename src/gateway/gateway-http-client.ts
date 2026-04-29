@@ -6,12 +6,12 @@
  * hooks, and any internal code that needs to call gateway HTTP endpoints.
  */
 
+import type { IdentityCore } from "@edwinpai/identity-core";
+import { loadNativeIdentityCore } from "@edwinpai/identity-core";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { IdentityCore } from "../../packages/identity-core/src/types.js";
-import { loadNativeIdentityCore } from "../../packages/identity-core/src/native-loader.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 import { RequestSigner } from "../auth/request-signer.js";
 import { loadConfig, resolveGatewayPort } from "../config/config.js";
 

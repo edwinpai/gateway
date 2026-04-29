@@ -8,8 +8,9 @@
  * @see https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0104.md
  */
 
+import type { IdentityCore } from "@edwinpai/identity-core";
 import type { IncomingMessage } from "node:http";
-import type { IdentityCore } from "../../packages/identity-core/src/types.js";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import type {
   PublicKey,
   BSVIdentity,
@@ -17,7 +18,6 @@ import type {
   VerifiableCertificate,
   AuthErrorCode,
 } from "../types/index.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 import { AuthError } from "../types/index.js";
 import { verifySignedRequest, type VerificationOptions } from "./verification.js";
 

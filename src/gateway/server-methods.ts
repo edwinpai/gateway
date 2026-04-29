@@ -1,6 +1,6 @@
-import type { SignedEnvelope } from "../../packages/identity-core/src/types.js";
+import type { SignedEnvelope } from "@edwinpai/identity-core";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import type { GatewayRequestHandlers, GatewayRequestOptions } from "./server-methods/types.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 import {
   resolveSubagentSpawnPolicy,
   recordSubagentSpawnAlwaysAllow,

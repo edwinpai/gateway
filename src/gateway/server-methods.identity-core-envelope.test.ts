@@ -1,9 +1,9 @@
+import type { SignedEnvelope } from "@edwinpai/identity-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SignedEnvelope } from "../../packages/identity-core/src/types.js";
 
 const identityCoreVerifyEnvelope = vi.fn();
 
-vi.mock("../../packages/identity-core/src/node-binding.js", () => ({
+vi.mock("@edwinpai/identity-core", () => ({
   createNodeIdentityCoreBinding: vi.fn(() => ({
     verifyEnvelope: identityCoreVerifyEnvelope,
   })),

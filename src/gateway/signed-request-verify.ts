@@ -11,9 +11,9 @@
  * When enabled, sensitive methods require valid signatures.
  */
 
+import type { SignedEnvelope, VerifyResult } from "@edwinpai/identity-core";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import { createHash, createVerify } from "crypto";
-import type { SignedEnvelope, VerifyResult } from "../../packages/identity-core/src/types.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 
 /** Methods that require BSV-signed requests when enforcement is on */
 export const SIGNATURE_REQUIRED_METHODS = new Set([

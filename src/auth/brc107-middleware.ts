@@ -11,8 +11,9 @@
  * @see BRC-103: Peer-to-peer Authentication
  */
 
+import type { IdentityCore } from "@edwinpai/identity-core";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { IdentityCore } from "../../packages/identity-core/src/types.js";
+import { createNodeIdentityCoreBinding } from "@edwinpai/identity-core";
 import type {
   PublicKey,
   Signature,
@@ -22,7 +23,6 @@ import type {
   BSVIdentity,
   RequestVerificationErrorCode,
 } from "./types.js";
-import { createNodeIdentityCoreBinding } from "../../packages/identity-core/src/node-binding.js";
 import { errorCodeToHttpStatus } from "../types/errors.js";
 import { verifySignatureUnified } from "./verification.js";
 

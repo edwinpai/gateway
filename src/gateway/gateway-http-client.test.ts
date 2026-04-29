@@ -30,7 +30,7 @@ vi.mock("../auth/request-signer.js", () => ({
   },
 }));
 
-vi.mock("../../packages/identity-core/src/native-loader.js", () => ({
+vi.mock("@edwinpai/identity-core", () => ({
   loadNativeIdentityCore,
 }));
 

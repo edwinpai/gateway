@@ -1,4 +1,4 @@
-import type { SignedEnvelope } from "../../../packages/identity-core/src/types.js";
+import type { SignedEnvelope } from "@edwinpai/identity-core";
 import type { ModelCatalogEntry } from "../../agents/model-catalog.js";
 import type { createDefaultDeps } from "../../cli/deps.js";
 import type { HealthSummary } from "../../commands/health.js";

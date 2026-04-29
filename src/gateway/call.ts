@@ -223,10 +223,8 @@ export async function callGateway<T = Record<string, unknown>>(
           const { SIGNATURE_REQUIRED_METHODS } = await import("./signed-request-verify.js");
           const { loadDesktopIdentityKey } = await import("../infra/desktop-identity.js");
           const { createSignedEnvelope } = await import("../infra/signed-envelope.js");
-          const { createNodeIdentityCoreBinding } =
-            await import("../../packages/identity-core/src/node-binding.js");
-          const { loadNativeIdentityCore } =
-            await import("../../packages/identity-core/src/native-loader.js");
+          const { createNodeIdentityCoreBinding } = await import("@edwinpai/identity-core");
+          const { loadNativeIdentityCore } = await import("@edwinpai/identity-core");
 
           let params = opts.params as Record<string, unknown> | undefined;
           if (SIGNATURE_REQUIRED_METHODS.has(opts.method) && !params?.signedEnvelope) {

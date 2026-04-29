@@ -9,16 +9,12 @@
  * @see https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md
  */
 
-import { createHash } from "node:crypto";
-import type {
-  IdentityCore,
-  SignMessageInput,
-  SignedMessage,
-} from "../../packages/identity-core/src/types.js";
+import type { IdentityCore, SignMessageInput, SignedMessage } from "@edwinpai/identity-core";
 import {
   createNodeIdentityCoreBinding,
   type NodeIdentityCoreTransport,
-} from "../../packages/identity-core/src/node-binding.js";
+} from "@edwinpai/identity-core";
+import { createHash } from "node:crypto";
 import { RequestSigner, type SignedRequestHeaders } from "../auth/request-signer.js";
 import { BSVCrypto, SecurePrivateKey, SecurePublicKey } from "../crypto/bsv-sdk-wrapper.js";
 import { ECIES } from "../crypto/ecies.js";
