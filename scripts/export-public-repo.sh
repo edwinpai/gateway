@@ -152,6 +152,37 @@ fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}
 `);
 NODE
 
+  cat > "$TARGET_DIR/tsdown.config.ts" <<'EOF'
+import { defineConfig } from "tsdown";
+
+const env = {
+  NODE_ENV: "production",
+};
+
+export default defineConfig([
+  {
+    entry: "src/index.ts",
+    env,
+    fixedExtension: false,
+    platform: "node",
+  },
+  {
+    entry: "src/entry.ts",
+    env,
+    fixedExtension: false,
+    platform: "node",
+  },
+  {
+    dts: true,
+    entry: "src/plugin-sdk/index.ts",
+    outDir: "dist/plugin-sdk",
+    env,
+    fixedExtension: false,
+    platform: "node",
+  },
+]);
+EOF
+
   mkdir -p "$TARGET_DIR/src/config" "$TARGET_DIR/src/agents/pi-embedded-runner"
   cat > "$TARGET_DIR/src/config/types.ts" <<'EOF'
 // Public export type shim.
