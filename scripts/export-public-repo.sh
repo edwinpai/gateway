@@ -67,6 +67,7 @@ RSYNC_ARGS=(
   --exclude '/pnpm-debug.log*'
   --exclude '/docs/internal/'
   --exclude '/archive/'
+  --exclude '/packages/'
   --exclude '/packages/identity-core/'
   --exclude '/packages/shad-core/'
   --exclude '/src/identity-core*'
@@ -142,6 +143,7 @@ pkg.scripts = {
   prepack: "pnpm build",
 };
 pkg.dependencies = {
+  "@edwinpai/gateway-core": "1.0.0-beta.2",
   "@edwinpai/identity-core": "1.0.0-beta.2",
   "@edwinpai/shad-core": "1.0.0-beta.2",
 };

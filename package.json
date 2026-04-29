@@ -37,6 +37,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
+    "@edwinpai/gateway-core": "1.0.0-beta.2",
     "@edwinpai/identity-core": "1.0.0-beta.2",
     "@edwinpai/shad-core": "1.0.0-beta.2"
   },
