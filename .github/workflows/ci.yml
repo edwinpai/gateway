@@ -83,6 +83,9 @@ jobs:
             task: protected-cores
             command: pnpm check:protected-cores
           - runtime: node
+            task: runtime-package-smoke
+            command: rm -rf packages/identity-core/dist packages/shad-core/dist && EDWINPAI_FORCE_BUILD=1 node scripts/run-node.mjs --help
+          - runtime: node
             task: build
             command: pnpm build
           - runtime: node

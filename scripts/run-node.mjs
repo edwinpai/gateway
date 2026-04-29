@@ -14,6 +14,10 @@ const distEntry = path.join(distRoot, "/entry.js");
 const buildStampPath = path.join(distRoot, ".buildstamp");
 const srcRoot = path.join(cwd, "src");
 const configFiles = [path.join(cwd, "tsconfig.json"), path.join(cwd, "package.json")];
+const protectedWorkspacePackages = [
+  { name: "@edwinpai/identity-core", dir: path.join(cwd, "packages", "identity-core") },
+  { name: "@edwinpai/shad-core", dir: path.join(cwd, "packages", "shad-core") },
+];
 
 const statMtime = (filePath) => {
   try {
@@ -85,6 +89,14 @@ const shouldBuild = () => {
     return true;
   }
 
+  for (const workspacePackage of protectedWorkspacePackages) {
+    const packageJson = path.join(workspacePackage.dir, "package.json");
+    const distIndex = path.join(workspacePackage.dir, "dist", "index.js");
+    if (statMtime(packageJson) != null && statMtime(distIndex) == null) {
+      return true;
+    }
+  }
+
   for (const filePath of configFiles) {
     const mtime = statMtime(filePath);
     if (mtime != null && mtime > stampMtime) {
@@ -135,24 +147,46 @@ if (!shouldBuild()) {
   runNode();
 } else {
   logRunner("Building TypeScript (dist is stale).");
-  const pnpmArgs = ["exec", compiler];
-  const buildCmd = process.platform === "win32" ? "cmd.exe" : "pnpm";
-  const buildArgs =
-    process.platform === "win32" ? ["/d", "/s", "/c", "pnpm", ...pnpmArgs] : pnpmArgs;
-  const build = spawn(buildCmd, buildArgs, {
-    cwd,
-    env,
-    stdio: "inherit",
-  });
+  const buildSteps = [
+    ...protectedWorkspacePackages
+      .filter(
+        (workspacePackage) => statMtime(path.join(workspacePackage.dir, "package.json")) != null,
+      )
+      .map((workspacePackage) => ({
+        label: `Building ${workspacePackage.name}`,
+        args: ["--dir", workspacePackage.dir, "build"],
+      })),
+    { label: "Building gateway runtime", args: ["exec", compiler] },
+  ];
 
-  build.on("exit", (code, signal) => {
-    if (signal) {
-      process.exit(1);
+  const runBuildStep = (index = 0) => {
+    const step = buildSteps[index];
+    if (!step) {
+      writeBuildStamp();
+      runNode();
+      return;
     }
-    if (code !== 0 && code !== null) {
-      process.exit(code);
-    }
-    writeBuildStamp();
-    runNode();
-  });
+
+    logRunner(`${step.label}.`);
+    const buildCmd = process.platform === "win32" ? "cmd.exe" : "pnpm";
+    const buildArgs =
+      process.platform === "win32" ? ["/d", "/s", "/c", "pnpm", ...step.args] : step.args;
+    const build = spawn(buildCmd, buildArgs, {
+      cwd,
+      env,
+      stdio: "inherit",
+    });
+
+    build.on("exit", (code, signal) => {
+      if (signal) {
+        process.exit(1);
+      }
+      if (code !== 0 && code !== null) {
+        process.exit(code);
+      }
+      runBuildStep(index + 1);
+    });
+  };
+
+  runBuildStep();
 }
