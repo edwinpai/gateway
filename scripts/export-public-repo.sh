@@ -68,6 +68,7 @@ RSYNC_ARGS=(
   --exclude '/docs/internal/'
   --exclude '/archive/'
   --exclude '/packages/'
+  --exclude '/scripts/public-package-manifest-check.mjs'
   --exclude '/packages/identity-core/'
   --exclude '/packages/shad-core/'
   --exclude '/src/identity-core*'
