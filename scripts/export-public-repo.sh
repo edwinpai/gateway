@@ -131,6 +131,11 @@ pkg.publishConfig = {
   access: "restricted",
   tag: "beta",
 };
+pkg.scripts = pkg.scripts || {};
+pkg.scripts.build = "pnpm build:gateway";
+delete pkg.scripts["build:protected"];
+delete pkg.scripts["check:protected-cores"];
+delete pkg.scripts["release:check"];
 pkg.dependencies = pkg.dependencies || {};
 if (pkg.dependencies["@edwinpai/identity-core"] === "workspace:*") {
   pkg.dependencies["@edwinpai/identity-core"] = "1.0.0-beta.2";

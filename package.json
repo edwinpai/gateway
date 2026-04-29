@@ -39,14 +39,12 @@
     "./cli-entry": "./edwinpai.mjs"
   },
   "scripts": {
-    "build": "pnpm build:protected && pnpm build:gateway",
+    "build": "pnpm build:gateway",
     "build:gateway": "pnpm canvas:a2ui:bundle && tsdown && node --import tsx scripts/canvas-a2ui-copy.ts && node --import tsx scripts/copy-hook-metadata.ts && node --import tsx scripts/write-build-info.ts && node --import tsx scripts/write-cli-compat.ts",
-    "build:protected": "pnpm --dir packages/identity-core build && pnpm --dir packages/shad-core build",
     "canvas:a2ui:bundle": "bash scripts/bundle-a2ui.sh",
     "check": "pnpm tsgo && pnpm lint && pnpm format",
     "check:launch-followup": "pnpm exec vitest run src/agents/edwinpai-tools.subagents.sessions-spawn-allowed-collections.test.ts src/commands/doctor-knowledge.test.ts src/commands/onboard-non-interactive.openai-api-key.test.ts src/daemon/service-audit.test.ts src/daemon/service-env.test.ts && bash -n install.sh scripts/test-install-sh-docker.sh scripts/docker/install-sh-smoke/run.sh scripts/docker/install-sh-nonroot/run.sh",
     "check:loc": "node --import tsx scripts/check-ts-max-loc.ts --max 500",
-    "check:protected-cores": "pnpm --dir packages/identity-core build && pnpm --dir packages/shad-core build && pnpm build && pnpm release:check && pnpm exec vitest run src/identity-core.boundary.test.ts src/identity-core.native-loader.test.ts src/identity-core-artifact-sync.test.ts src/identity-core-base-package-prep.test.ts src/identity-core-platform-package-prep.test.ts src/memory/shad-core-package-seam.boundary.test.ts src/shad-core.boundary.test.ts",
     "dev": "node scripts/run-node.mjs",
     "docs:bin": "node scripts/build-docs-list.mjs",
     "docs:build": "cd docs && pnpm dlx --reporter append-only mint broken-links",
@@ -68,7 +66,6 @@
     "prepare": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",
     "protocol:check": "pnpm protocol:gen && git diff --exit-code -- dist/protocol.schema.json",
     "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
-    "release:check": "pnpm --dir packages/identity-core build && node --import tsx scripts/release-check.ts",
     "security:all": "pnpm security:verify-deps && pnpm security:audit-crypto && pnpm security:generate-sbom",
     "security:audit-crypto": "node --import tsx scripts/audit-crypto.ts",
     "security:generate-sbom": "node --import tsx scripts/generate-sbom.ts",
