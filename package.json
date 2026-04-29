@@ -1,7 +1,7 @@
 {
   "name": "@edwinpai/edwinpai",
   "version": "1.0.0-beta.2",
-  "private": true,
+  "private": false,
   "description": "EdwinPAI — Personal AI agent framework with cryptographic security",
   "keywords": [],
   "license": "BSL-1.1",
@@ -243,5 +243,9 @@
       "**/vendor/**",
       "dist/EdwinPAI.app/**"
     ]
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "tag": "beta"
   }
 }

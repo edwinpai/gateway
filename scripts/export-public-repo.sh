@@ -126,6 +126,11 @@ if [[ "$DRY_RUN" != "1" ]]; then
 const fs = require("node:fs");
 const packagePath = process.argv[2];
 const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+pkg.private = false;
+pkg.publishConfig = {
+  access: "restricted",
+  tag: "beta",
+};
 pkg.dependencies = pkg.dependencies || {};
 if (pkg.dependencies["@edwinpai/identity-core"] === "workspace:*") {
   pkg.dependencies["@edwinpai/identity-core"] = "1.0.0-beta.2";
@@ -141,6 +146,57 @@ for (const section of ["dependencies", "devDependencies", "peerDependencies", "o
 fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}
 `);
 NODE
+
+  mkdir -p "$TARGET_DIR/.github/workflows"
+  cat > "$TARGET_DIR/.github/workflows/npm-publish.yml" <<'EOF'
+name: Publish @edwinpai/edwinpai
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and pack without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish-root:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Guard protected source boundaries
+        run: |
+          chmod +x scripts/public-export-guard.sh
+          scripts/public-export-guard.sh .
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build sanitized gateway package
+        run: pnpm build
+
+      - name: Preview npm package contents
+        run: npm pack --dry-run
+
+      - name: Publish @edwinpai/edwinpai
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access restricted --tag beta
+EOF
 
   cat > "$TARGET_DIR/PUBLIC_EXPORT.md" <<'EOF'
 # Public Gateway Export
