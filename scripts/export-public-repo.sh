@@ -68,7 +68,6 @@ RSYNC_ARGS=(
   --exclude '/docs/internal/'
   --exclude '/archive/'
   --exclude '/packages/'
-  --exclude '/scripts/public-package-manifest-check.mjs'
   --exclude '/packages/identity-core/'
   --exclude '/packages/shad-core/'
   --exclude '/src/identity-core*'
@@ -303,8 +302,12 @@ jobs:
 
       - name: Guard protected source boundaries
         run: |
-          chmod +x scripts/public-export-guard.sh
+          chmod +x scripts/public-export-guard.sh scripts/public-package-manifest-check.mjs
           scripts/public-export-guard.sh .
+
+      - name: Check public package manifest
+        run: |
+          node scripts/public-package-manifest-check.mjs .
 
       - name: Install dependencies
         env:

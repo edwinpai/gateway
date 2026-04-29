@@ -26,8 +26,12 @@ jobs:
 
       - name: Guard protected source boundaries
         run: |
-          chmod +x scripts/public-export-guard.sh
+          chmod +x scripts/public-export-guard.sh scripts/public-package-manifest-check.mjs
           scripts/public-export-guard.sh .
+
+      - name: Check public package manifest
+        run: |
+          node scripts/public-package-manifest-check.mjs .
 
       - name: Install dependencies
         env:
