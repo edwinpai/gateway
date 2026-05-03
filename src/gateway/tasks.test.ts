@@ -376,3 +376,39 @@ test("canTaskAutoRun rejects queued tasks that are already complete", () => {
     }),
   ).toBe(false);
 });
+
+test("reconcile merges duplicate queued/current task records by content", () => {
+  const entry = reconcileTaskQueue({
+    sessionId: "sess",
+    updatedAt: 1,
+    activeTaskId: "running-copy",
+    tasks: [
+      {
+        id: "queued-copy",
+        goal: "Prepare EdwinPAI release surfaces",
+        criteria: ["skills", "branding", "validation"],
+        completedCriteria: [],
+        autoContinueEnabled: true,
+        active: false,
+        status: "active",
+      },
+      {
+        id: "running-copy",
+        goal: "Prepare EdwinPAI release surfaces",
+        criteria: ["skills", "branding", "validation"],
+        completedCriteria: ["skills", "branding"],
+        autoContinueEnabled: true,
+        active: true,
+        status: "active",
+      },
+    ],
+  } as SessionEntry);
+
+  expect(entry.tasks).toHaveLength(1);
+  expect(entry.activeTaskId).toBe("running-copy");
+  expect(entry.activeTask).toMatchObject({
+    id: "running-copy",
+    completedCriteria: ["skills", "branding"],
+    active: true,
+  });
+});

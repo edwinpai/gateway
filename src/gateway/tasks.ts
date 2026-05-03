@@ -88,6 +88,65 @@ export function reconcileTaskState(
   return next;
 }
 
+function taskFingerprint(task: SessionTaskState): string | undefined {
+  const goal = task.goal?.trim().toLowerCase();
+  if (!goal) {
+    return undefined;
+  }
+  const definitionOfDone = task.definitionOfDone?.trim().toLowerCase() ?? "";
+  const criteria = Array.isArray(task.criteria)
+    ? task.criteria.map((item) => item.trim().toLowerCase()).filter(Boolean)
+    : [];
+  return JSON.stringify({ goal, definitionOfDone, criteria });
+}
+
+function mergeDuplicateTasks(
+  tasks: SessionTaskState[],
+  preferredActiveId: string | undefined,
+): SessionTaskState[] {
+  const merged: SessionTaskState[] = [];
+  const byFingerprint = new Map<string, number>();
+
+  for (const task of tasks) {
+    const fingerprint = taskFingerprint(task);
+    if (!fingerprint) {
+      merged.push(task);
+      continue;
+    }
+
+    const existingIndex = byFingerprint.get(fingerprint);
+    if (existingIndex === undefined) {
+      byFingerprint.set(fingerprint, merged.length);
+      merged.push(task);
+      continue;
+    }
+
+    const existing = merged[existingIndex]!;
+    const existingCompleted = existing.completedCriteria?.length ?? 0;
+    const taskCompleted = task.completedCriteria?.length ?? 0;
+    const preferTask =
+      task.id === preferredActiveId ||
+      (existing.id !== preferredActiveId && task.active === true && existing.active !== true) ||
+      (existing.id !== preferredActiveId && taskCompleted > existingCompleted);
+    const base = preferTask ? task : existing;
+    const other = preferTask ? existing : task;
+    const criteria = base.criteria ?? other.criteria ?? [];
+    const completed = Array.from(
+      new Set([...(other.completedCriteria ?? []), ...(base.completedCriteria ?? [])]),
+    ).filter((item) => criteria.includes(item));
+
+    merged[existingIndex] = reconcileTaskState({
+      ...other,
+      ...base,
+      criteria,
+      completedCriteria: completed,
+      active: base.active === true,
+    })!;
+  }
+
+  return merged;
+}
+
 export function reconcileTaskQueue(entry: SessionEntry): SessionEntry {
   const next: SessionEntry = { ...entry };
   let tasks = Array.isArray(entry.tasks)
@@ -107,6 +166,8 @@ export function reconcileTaskQueue(entry: SessionEntry): SessionEntry {
     (typeof entry.activeTaskId === "string" && entry.activeTaskId.trim()) ||
     (typeof entry.activeTask?.id === "string" && entry.activeTask.id.trim()) ||
     undefined;
+
+  tasks = mergeDuplicateTasks(tasks, requestedActiveId);
   const activeTask =
     (requestedActiveId ? tasks.find((task) => task.id === requestedActiveId) : undefined) ??
     tasks[0];
