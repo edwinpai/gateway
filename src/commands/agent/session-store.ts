@@ -42,35 +42,44 @@ export async function updateSessionStoreAfterAgentRun(params: {
   const contextTokens =
     params.contextTokensOverride ?? lookupContextTokens(modelUsed) ?? DEFAULT_CONTEXT_TOKENS;
 
-  const entry = sessionStore[sessionKey] ?? {
+  const staleEntry = sessionStore[sessionKey] ?? {
     sessionId,
     updatedAt: Date.now(),
   };
-  const next: SessionEntry = {
-    ...entry,
-    sessionId,
-    updatedAt: Date.now(),
-    modelProvider: providerUsed,
-    model: modelUsed,
-    contextTokens,
-  };
-  if (isCliProvider(providerUsed, cfg)) {
-    const cliSessionId = result.meta.agentMeta?.sessionId?.trim();
-    if (cliSessionId) {
-      setCliSessionId(next, providerUsed, cliSessionId);
+
+  const next = await updateSessionStore(storePath, (store) => {
+    // Re-read the entry inside updateSessionStore's lock. Agent tools (notably
+    // task_state) can update the same session while the model run is active;
+    // using the pre-run in-memory entry here would clobber those updates and
+    // prevent task auto-continue from seeing newly-created/progressed tasks.
+    const entry = store[sessionKey] ?? staleEntry;
+    const merged: SessionEntry = {
+      ...entry,
+      sessionId,
+      updatedAt: Date.now(),
+      modelProvider: providerUsed,
+      model: modelUsed,
+      contextTokens,
+    };
+    if (isCliProvider(providerUsed, cfg)) {
+      const cliSessionId = result.meta.agentMeta?.sessionId?.trim();
+      if (cliSessionId) {
+        setCliSessionId(merged, providerUsed, cliSessionId);
+      }
     }
-  }
-  next.abortedLastRun = result.meta.aborted ?? false;
-  if (hasNonzeroUsage(usage)) {
-    const input = usage.input ?? 0;
-    const output = usage.output ?? 0;
-    const promptTokens = input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
-    next.inputTokens = input;
-    next.outputTokens = output;
-    next.totalTokens = promptTokens > 0 ? promptTokens : (usage.total ?? input);
-  }
-  sessionStore[sessionKey] = next;
-  await updateSessionStore(storePath, (store) => {
-    store[sessionKey] = next;
+    merged.abortedLastRun = result.meta.aborted ?? false;
+    if (hasNonzeroUsage(usage)) {
+      const input = usage.input ?? 0;
+      const output = usage.output ?? 0;
+      const promptTokens = input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+      merged.inputTokens = input;
+      merged.outputTokens = output;
+      merged.totalTokens = promptTokens > 0 ? promptTokens : (usage.total ?? input);
+    }
+    store[sessionKey] = merged;
+    return merged;
   });
+
+  sessionStore[sessionKey] = next;
+  return next;
 }

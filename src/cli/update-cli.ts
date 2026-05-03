@@ -86,7 +86,6 @@ const STEP_LABELS: Record<string, string> = {
   "preflight cleanup": "Cleaning preflight worktree",
   "deps install": "Installing dependencies",
   build: "Building",
-  "ui:build": "Building UI",
   "edwinpai doctor": "Running doctor checks",
   "git rev-parse HEAD (after)": "Verifying update",
   "global update": "Updating via package manager",

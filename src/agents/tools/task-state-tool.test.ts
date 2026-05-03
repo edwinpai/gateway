@@ -176,3 +176,64 @@ it("updates the selected queued task instead of creating a duplicate when active
     completedCriteria: ["root cause identified", "fix landed"],
   });
 });
+
+it("starts a fresh task when redefining a terminal selected task without an explicit id", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "edwin-task-tool-terminal-"));
+  const storePath = path.join(dir, "sessions.json");
+  await fs.writeFile(
+    storePath,
+    JSON.stringify({
+      "agent:main:main": {
+        sessionId: "sess-terminal",
+        updatedAt: 1,
+        tasks: [
+          {
+            id: "docs-task",
+            goal: "Old docs reconciliation",
+            criteria: ["inventory", "commit"],
+            completedCriteria: ["inventory", "commit"],
+            autoContinueEnabled: false,
+            status: "done",
+            active: false,
+            lastStopReason: "done",
+          },
+        ],
+        activeTaskId: "docs-task",
+      },
+    }),
+    "utf-8",
+  );
+  loadConfigMock.mockReturnValue({
+    session: { store: storePath },
+  });
+
+  const tool = createTaskStateTool({ agentSessionKey: "agent:main:main" });
+  const result = await tool.execute("call-terminal-1", {
+    goal: "Fix task replay",
+    criteria: ["find bug", "add tests"],
+    autoContinueEnabled: true,
+    status: "active",
+  });
+
+  const details = result.details as { ok: boolean; activeTask?: Record<string, unknown> };
+  expect(details.ok).toBe(true);
+  expect(details.activeTask).toMatchObject({
+    goal: "Fix task replay",
+    criteria: ["find bug", "add tests"],
+    completedCriteria: [],
+    autoContinueEnabled: true,
+    status: "active",
+    active: true,
+  });
+  expect(details.activeTask?.id).not.toBe("docs-task");
+
+  const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
+  const tasks = stored["agent:main:main"].tasks;
+  expect(tasks).toHaveLength(2);
+  expect(tasks.find((task: { id: string }) => task.id === "docs-task")).toMatchObject({
+    status: "done",
+    active: false,
+    lastStopReason: "done",
+  });
+  expect(stored["agent:main:main"].activeTaskId).not.toBe("docs-task");
+});

@@ -40,6 +40,7 @@ import { formatCliCommand } from "../cli/command-format.js";
 import { type CliDeps, createDefaultDeps } from "../cli/deps.js";
 import { loadConfig } from "../config/config.js";
 import {
+  loadSessionStore,
   resolveAgentIdFromSessionKey,
   resolveSessionFilePath,
   type SessionEntry,
@@ -543,7 +544,19 @@ export async function agentCommand(
       payloads,
     });
 
-    const currentEntry = sessionStore?.[sessionKey ?? ""];
+    const loadLatestSessionEntry = (): SessionEntry | undefined => {
+      if (!sessionStore || !sessionKey) {
+        return undefined;
+      }
+      const latest =
+        loadSessionStore(storePath, { skipCache: true })[sessionKey] ?? sessionStore[sessionKey];
+      if (latest) {
+        sessionStore[sessionKey] = latest;
+      }
+      return latest;
+    };
+
+    const currentEntry = loadLatestSessionEntry();
     const currentTaskEntry = getActiveTask(currentEntry);
     const taskState = resolveTaskState(currentTaskEntry);
     const autoContinue = resolveAutoContinueState(currentEntry?.autoContinue);
@@ -566,7 +579,7 @@ export async function agentCommand(
         const baseTask = isContinuationTurn
           ? currentTaskEntry
           : {
-              ...(currentTaskEntry ?? {}),
+              ...currentTaskEntry,
               status: "active",
               iterationCount: 0,
               active: true,
@@ -603,7 +616,7 @@ export async function agentCommand(
         const baseState = isContinuationTurn
           ? currentEntry?.autoContinue
           : {
-              ...(currentEntry?.autoContinue ?? {}),
+              ...currentEntry?.autoContinue,
               iterationCount: 0,
               active: true,
               lastStopReason: undefined,
@@ -631,22 +644,25 @@ export async function agentCommand(
 
       if (shouldSchedule) {
         const timer = setTimeout(() => {
-          const latestEntry = sessionStore[sessionKey];
-          if (taskState.autoContinueEnabled && !shouldContinueTask(latestEntry)) {
-            logSessionStateChange({
-              sessionId: latestEntry?.sessionId ?? sessionId,
-              sessionKey,
-              state: "idle",
-              reason: "task_no_longer_runnable",
-            });
-            return;
+          const latestEntry = loadLatestSessionEntry();
+          let message = AUTO_CONTINUE_PROMPT;
+          if (taskState.autoContinueEnabled) {
+            const latestTask = getActiveTask(latestEntry);
+            if (!latestEntry || !latestTask || !shouldContinueTask(latestEntry)) {
+              logSessionStateChange({
+                sessionId: latestEntry?.sessionId ?? sessionId,
+                sessionKey,
+                state: "idle",
+                reason: "task_no_longer_runnable",
+              });
+              return;
+            }
+            message = buildTaskContinuationPrompt(latestTask);
           }
           void agentCommand(
             {
               ...opts,
-              message: taskState.autoContinueEnabled
-                ? buildTaskContinuationPrompt(getActiveTask(latestEntry))
-                : AUTO_CONTINUE_PROMPT,
+              message,
               sessionKey,
               sessionId: undefined,
               to: undefined,

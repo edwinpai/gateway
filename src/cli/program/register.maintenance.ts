@@ -41,7 +41,7 @@ export function registerMaintenanceCommands(program: Command) {
 
   program
     .command("dashboard")
-    .description("Open the Control UI with your current token")
+    .description("Print that the legacy browser dashboard has been removed")
     .addHelpText(
       "after",
       () =>

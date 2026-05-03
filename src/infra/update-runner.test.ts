@@ -52,7 +52,7 @@ describe("runGatewayUpdate", () => {
       [`git -C ${tempDir} rev-parse --show-toplevel`]: { stdout: tempDir },
       [`git -C ${tempDir} rev-parse HEAD`]: { stdout: "abc123" },
       [`git -C ${tempDir} rev-parse --abbrev-ref HEAD`]: { stdout: "main" },
-      [`git -C ${tempDir} status --porcelain -- :!dist/control-ui/`]: { stdout: " M README.md" },
+      [`git -C ${tempDir} status --porcelain`]: { stdout: " M README.md" },
     });
 
     const result = await runGatewayUpdate({
@@ -77,7 +77,7 @@ describe("runGatewayUpdate", () => {
       [`git -C ${tempDir} rev-parse --show-toplevel`]: { stdout: tempDir },
       [`git -C ${tempDir} rev-parse HEAD`]: { stdout: "abc123" },
       [`git -C ${tempDir} rev-parse --abbrev-ref HEAD`]: { stdout: "main" },
-      [`git -C ${tempDir} status --porcelain -- :!dist/control-ui/`]: { stdout: "" },
+      [`git -C ${tempDir} status --porcelain`]: { stdout: "" },
       [`git -C ${tempDir} rev-parse --abbrev-ref --symbolic-full-name @{upstream}`]: {
         stdout: "origin/main",
       },
@@ -111,7 +111,7 @@ describe("runGatewayUpdate", () => {
     const { runner, calls } = createRunner({
       [`git -C ${tempDir} rev-parse --show-toplevel`]: { stdout: tempDir },
       [`git -C ${tempDir} rev-parse HEAD`]: { stdout: "abc123" },
-      [`git -C ${tempDir} status --porcelain -- :!dist/control-ui/`]: { stdout: "" },
+      [`git -C ${tempDir} status --porcelain`]: { stdout: "" },
       [`git -C ${tempDir} fetch --all --prune --tags`]: { stdout: "" },
       [`git -C ${tempDir} tag --list v* --sort=-v:refname`]: {
         stdout: `${stableTag}\n${betaTag}\n`,
@@ -119,8 +119,6 @@ describe("runGatewayUpdate", () => {
       [`git -C ${tempDir} checkout --detach ${stableTag}`]: { stdout: "" },
       "pnpm install": { stdout: "" },
       "pnpm build": { stdout: "" },
-      "pnpm ui:build": { stdout: "" },
-      [`git -C ${tempDir} checkout -- dist/control-ui/`]: { stdout: "" },
       "pnpm edwinpai doctor --non-interactive": { stdout: "" },
     });
 
@@ -259,7 +257,7 @@ describe("runGatewayUpdate", () => {
   it("cleans stale npm rename dirs before global update", async () => {
     const nodeModules = path.join(tempDir, "node_modules");
     const pkgRoot = path.join(nodeModules, "edwinpai");
-    const staleDir = path.join(nodeModules, ".edwin-stale");
+    const staleDir = path.join(nodeModules, ".edwinpai-stale");
     await fs.mkdir(staleDir, { recursive: true });
     await fs.mkdir(pkgRoot, { recursive: true });
     await fs.writeFile(

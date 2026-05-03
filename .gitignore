@@ -56,3 +56,4 @@ USER.md
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs-site/node_modules/
+.tmp/

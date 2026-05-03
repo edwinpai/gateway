@@ -25,7 +25,6 @@ import {
 import { checkUpdateStatus, compareSemverStrings } from "../infra/update-check.js";
 import { runExec } from "../process/exec.js";
 import { VERSION } from "../version.js";
-import { resolveControlUiLinks } from "./onboard-helpers.js";
 import { getAgentLocalStatuses } from "./status-all/agents.js";
 import { buildChannelsTable } from "./status-all/channels.js";
 import { formatDuration, formatGatewayAuthUsed } from "./status-all/format.js";
@@ -265,15 +264,7 @@ export async function statusAllCommand(
           })()
         : null;
 
-    const controlUiEnabled = cfg.gateway?.controlUi?.enabled ?? true;
-    const dashboard = controlUiEnabled
-      ? resolveControlUiLinks({
-          port,
-          bind: cfg.gateway?.bind,
-          customBindHost: cfg.gateway?.customBindHost,
-          basePath: cfg.gateway?.controlUi?.basePath,
-        }).httpUrl
-      : null;
+    const dashboard = "Desktop app";
 
     const updateLine = (() => {
       if (update.installKind === "git" && update.git) {

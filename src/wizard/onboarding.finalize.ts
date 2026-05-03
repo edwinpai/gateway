@@ -24,16 +24,12 @@ import {
 import { formatHealthCheckFailure } from "../commands/health-format.js";
 import { healthCommand } from "../commands/health.js";
 import {
-  detectBrowserOpenSupport,
-  formatControlUiSshHint,
-  openUrl,
   probeGatewayReachable,
   waitForGatewayReachable,
   resolveControlUiLinks,
 } from "../commands/onboard-helpers.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
-import { ensureControlUiAssetsBuilt } from "../infra/control-ui-assets.js";
 import { restoreTerminalState } from "../terminal/restore.js";
 import { runTui } from "../tui/tui.js";
 import { resolveUserPath } from "../utils.js";
@@ -52,7 +48,7 @@ type FinalizeOnboardingOptions = {
 export async function finalizeOnboardingWizard(
   options: FinalizeOnboardingOptions,
 ): Promise<{ launchedTui: boolean }> {
-  const { flow, opts, baseConfig, nextConfig, settings, prompter, runtime } = options;
+  const { flow, opts, nextConfig, settings, prompter, runtime } = options;
 
   const withWizardProgress = async <T>(
     label: string,
@@ -228,15 +224,6 @@ export async function finalizeOnboardingWizard(
     }
   }
 
-  const controlUiEnabled =
-    nextConfig.gateway?.controlUi?.enabled ?? baseConfig.gateway?.controlUi?.enabled ?? true;
-  if (!opts.skipUi && controlUiEnabled) {
-    const controlUiAssets = await ensureControlUiAssetsBuilt(runtime);
-    if (!controlUiAssets.ok && controlUiAssets.message) {
-      runtime.error(controlUiAssets.message);
-    }
-  }
-
   await prompter.note(
     [
       "Add nodes for extra features:",
@@ -247,19 +234,11 @@ export async function finalizeOnboardingWizard(
     "Optional apps",
   );
 
-  const controlUiBasePath =
-    nextConfig.gateway?.controlUi?.basePath ?? baseConfig.gateway?.controlUi?.basePath;
   const links = resolveControlUiLinks({
     bind: settings.bind,
     port: settings.port,
     customBindHost: settings.customBindHost,
-    basePath: controlUiBasePath,
   });
-  const tokenParam =
-    settings.authMode === "token" && settings.gatewayToken
-      ? `?token=${encodeURIComponent(settings.gatewayToken)}`
-      : "";
-  const authedUrl = `${links.httpUrl}${tokenParam}`;
   const gatewayProbe = await probeGatewayReachable({
     url: links.wsUrl,
     token: settings.authMode === "token" ? settings.gatewayToken : undefined,
@@ -278,22 +257,14 @@ export async function finalizeOnboardingWizard(
     .catch(() => false);
 
   await prompter.note(
-    [
-      `Web UI: ${links.httpUrl}`,
-      tokenParam ? `Web UI (with token): ${authedUrl}` : undefined,
-      `Gateway WS: ${links.wsUrl}`,
-      gatewayStatusLine,
-      "Docs: https://docs.edwinpai.com/web/control-ui",
-    ]
+    ["UI: Edwin Desktop app", `Gateway WS: ${links.wsUrl}`, gatewayStatusLine]
       .filter(Boolean)
       .join("\n"),
-    "Control UI",
+    "Desktop",
   );
 
-  let controlUiOpened = false;
-  let controlUiOpenHint: string | undefined;
   let seededInBackground = false;
-  let hatchChoice: "tui" | "web" | "later" | null = null;
+  let hatchChoice: "tui" | "later" | null = null;
   let launchedTui = false;
 
   if (!opts.skipUi && gatewayProbe.ok) {
@@ -311,10 +282,8 @@ export async function finalizeOnboardingWizard(
 
     await prompter.note(
       [
-        "Gateway token: shared auth for the Gateway + Control UI.",
+        "Gateway token: shared auth for the Gateway and Desktop app.",
         "Stored in: ~/.edwinpai/edwinpai.json (gateway.auth.token) or EDWINPAI_GATEWAY_TOKEN.",
-        "Web UI stores a copy in this browser's localStorage (edwinpai.control.settings.v1).",
-        `Get the tokenized link anytime: ${formatCliCommand("edwinpai dashboard --no-open")}`,
       ].join("\n"),
       "Token",
     );
@@ -323,7 +292,6 @@ export async function finalizeOnboardingWizard(
       message: "How do you want to hatch your bot?",
       options: [
         { value: "tui", label: "Hatch in TUI (recommended)" },
-        { value: "web", label: "Open the Web UI" },
         { value: "later", label: "Do this later" },
       ],
       initialValue: "tui",
@@ -340,44 +308,11 @@ export async function finalizeOnboardingWizard(
         message: hasBootstrap ? "Wake up, my friend!" : undefined,
       });
       launchedTui = true;
-    } else if (hatchChoice === "web") {
-      const browserSupport = await detectBrowserOpenSupport();
-      if (browserSupport.ok) {
-        controlUiOpened = await openUrl(authedUrl);
-        if (!controlUiOpened) {
-          controlUiOpenHint = formatControlUiSshHint({
-            port: settings.port,
-            basePath: controlUiBasePath,
-            token: settings.gatewayToken,
-          });
-        }
-      } else {
-        controlUiOpenHint = formatControlUiSshHint({
-          port: settings.port,
-          basePath: controlUiBasePath,
-          token: settings.gatewayToken,
-        });
-      }
-      await prompter.note(
-        [
-          `Dashboard link (with token): ${authedUrl}`,
-          controlUiOpened
-            ? "Opened in your browser. Keep that tab to control EdwinPAI."
-            : "Copy/paste this URL in a browser on this machine to control EdwinPAI.",
-          controlUiOpenHint,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        "Dashboard ready",
-      );
     } else {
-      await prompter.note(
-        `When you're ready: ${formatCliCommand("edwinpai dashboard --no-open")}`,
-        "Later",
-      );
+      await prompter.note("When you're ready, open the Edwin Desktop app.", "Later");
     }
   } else if (opts.skipUi) {
-    await prompter.note("Skipping Control UI/TUI prompts.", "Control UI");
+    await prompter.note("Skipping Desktop/TUI prompts.", "Desktop");
   }
 
   await prompter.note(
@@ -438,44 +373,6 @@ export async function finalizeOnboardingWizard(
   }
   // Case 4: Both profile and cache exist (using cached version) - all good, nothing to do
 
-  const shouldOpenControlUi =
-    !opts.skipUi &&
-    settings.authMode === "token" &&
-    Boolean(settings.gatewayToken) &&
-    hatchChoice === null;
-  if (shouldOpenControlUi) {
-    const browserSupport = await detectBrowserOpenSupport();
-    if (browserSupport.ok) {
-      controlUiOpened = await openUrl(authedUrl);
-      if (!controlUiOpened) {
-        controlUiOpenHint = formatControlUiSshHint({
-          port: settings.port,
-          basePath: controlUiBasePath,
-          token: settings.gatewayToken,
-        });
-      }
-    } else {
-      controlUiOpenHint = formatControlUiSshHint({
-        port: settings.port,
-        basePath: controlUiBasePath,
-        token: settings.gatewayToken,
-      });
-    }
-
-    await prompter.note(
-      [
-        `Dashboard link (with token): ${authedUrl}`,
-        controlUiOpened
-          ? "Opened in your browser. Keep that tab to control EdwinPAI."
-          : "Copy/paste this URL in a browser on this machine to control EdwinPAI.",
-        controlUiOpenHint,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      "Dashboard ready",
-    );
-  }
-
   const webSearchKey = (nextConfig.tools?.web?.search?.apiKey ?? "").trim();
   const webSearchEnv = (process.env.BRAVE_API_KEY ?? "").trim();
   const hasWebSearchKey = Boolean(webSearchKey || webSearchEnv);
@@ -510,11 +407,9 @@ export async function finalizeOnboardingWizard(
   );
 
   await prompter.outro(
-    controlUiOpened
-      ? "Onboarding complete. Dashboard opened with your token; keep that tab to control EdwinPAI."
-      : seededInBackground
-        ? "Onboarding complete. Web UI seeded in the background; open it anytime with the tokenized link above."
-        : "Onboarding complete. Use the tokenized dashboard link above to control EdwinPAI.",
+    seededInBackground
+      ? "Onboarding complete. Your agent was seeded in the background; open Edwin Desktop to control EdwinPAI."
+      : "Onboarding complete. Open Edwin Desktop to control EdwinPAI.",
   );
 
   return { launchedTui };

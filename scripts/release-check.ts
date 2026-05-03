@@ -36,7 +36,16 @@ const releasePackRules: ReleasePackRule[] = [
     label: "@edwinpai/shad-core",
     cwd: resolve("packages/shad-core"),
     packageJsonPath: resolve("packages/shad-core/package.json"),
-    requiredPaths: ["README.md", "package.json", "dist/index.js", "dist/index.d.ts"],
+    requiredPaths: [
+      "README.md",
+      "package.json",
+      "dist/index.js",
+      "dist/index.d.ts",
+      "dist/native-loader.js",
+      "dist/native-loader.d.ts",
+      "dist/primitives.js",
+      "dist/primitives.d.ts",
+    ],
     forbiddenPrefixes: ["src/"],
     forbiddenPaths: ["tsconfig.json"],
     packageJsonChecks: [
@@ -227,15 +236,27 @@ function checkPackRule(rule: ReleasePackRule) {
   console.log(`release-check: ${rule.label} npm pack contents look OK.`);
 }
 
-export function isNativeIdentityCoreRequired(envValue: string | undefined): boolean {
+export function isTruthyEnvFlag(envValue: string | undefined): boolean {
   if (envValue === undefined) return false;
   if (envValue === "" || envValue === "0") return false;
   if (envValue.toLowerCase() === "false") return false;
   return true;
 }
 
+export function isNativeIdentityCoreRequired(envValue: string | undefined): boolean {
+  return isTruthyEnvFlag(envValue);
+}
+
+export function isNativeProtectedCoreReleaseRequired(envValue: string | undefined): boolean {
+  return isTruthyEnvFlag(envValue);
+}
+
 export function findBundledNativeAddons(packPaths: readonly string[]): string[] {
   return packPaths.filter((p) => /^native\/[^/]+\/identity-core\.node$/.test(p));
+}
+
+export function findCompiledJsProtectedRuntimeFiles(packPaths: readonly string[]): string[] {
+  return packPaths.filter((p) => /^dist\/.+\.m?js$/.test(p));
 }
 
 /**
@@ -247,7 +268,7 @@ export function findBundledNativeAddons(packPaths: readonly string[]): string[] 
  * current state of the build origin is shared-library staging only.
  */
 function checkNativeIdentityCoreStrictMode() {
-  if (!isNativeIdentityCoreRequired(process.env.EDWINPAI_REQUIRE_NATIVE_IDENTITY_CORE)) {
+  if (!isTruthyEnvFlag(process.env.EDWINPAI_REQUIRE_NATIVE_IDENTITY_CORE)) {
     return;
   }
 
@@ -274,6 +295,50 @@ function checkNativeIdentityCoreStrictMode() {
   }
 }
 
+/**
+ * Public release strict mode: the transitional protected runtime packages must
+ * not be mistaken for final public-safe protected cores. Today shad-core and
+ * gateway-core are still compiled JS package boundaries, while the final public
+ * release target is native Rust/N-API protected artifacts plus thin JS loaders.
+ */
+function checkNativeProtectedCoreStrictMode() {
+  if (!isNativeProtectedCoreReleaseRequired(process.env.EDWINPAI_REQUIRE_NATIVE_PROTECTED_CORES)) {
+    return;
+  }
+
+  const protectedPackages = [
+    { label: "@edwinpai/shad-core", cwd: resolve("packages/shad-core") },
+    { label: "@edwinpai/gateway-core", cwd: resolve("packages/gateway-core") },
+  ];
+
+  const failures: string[] = [];
+  for (const protectedPackage of protectedPackages) {
+    const results = runPackDry(protectedPackage.cwd);
+    const paths = results.flatMap((entry) => entry.files ?? []).map((file) => file.path);
+    const compiledJsRuntimeFiles = findCompiledJsProtectedRuntimeFiles(paths);
+    if (compiledJsRuntimeFiles.length > 0) {
+      failures.push(
+        `${protectedPackage.label} still ships compiled JS runtime files (${compiledJsRuntimeFiles.slice(0, 5).join(", ")}${compiledJsRuntimeFiles.length > 5 ? ", ..." : ""})`,
+      );
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(
+      "release-check: EDWINPAI_REQUIRE_NATIVE_PROTECTED_CORES is set, but not all protected runtime packages are native-artifact-only.",
+    );
+    for (const failure of failures) {
+      console.error(`  - ${failure}`);
+    }
+    console.error(
+      "release-check: keep these packages private/transitional until shad/gateway protected internals move behind Rust/N-API artifacts or another public-safe native boundary.",
+    );
+    process.exit(1);
+  }
+
+  console.log("release-check: protected runtime packages satisfy native-only strict mode.");
+}
+
 function main() {
   checkPluginVersions();
 
@@ -282,6 +347,7 @@ function main() {
   }
 
   checkNativeIdentityCoreStrictMode();
+  checkNativeProtectedCoreStrictMode();
 }
 
 const isInvokedDirectly =

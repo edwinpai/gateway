@@ -9,18 +9,14 @@ import {
   type ResolvedGatewayAuth,
   resolveGatewayAuth,
 } from "./auth.js";
-import { normalizeControlUiBasePath } from "./control-ui-shared.js";
 import { resolveHooksConfig } from "./hooks.js";
 import { isLoopbackHost, resolveGatewayBindHost } from "./net.js";
 
 export type GatewayRuntimeConfig = {
   bindHost: string;
-  controlUiEnabled: boolean;
   openAiChatCompletionsEnabled: boolean;
   openResponsesEnabled: boolean;
   openResponsesConfig?: import("../config/types.gateway.js").GatewayHttpResponsesConfig;
-  controlUiBasePath: string;
-  controlUiRoot?: string;
   resolvedAuth: ResolvedGatewayAuth;
   authMode: ResolvedGatewayAuth["mode"];
   tailscaleConfig: GatewayTailscaleConfig;
@@ -34,6 +30,7 @@ export async function resolveGatewayRuntimeConfig(params: {
   port: number;
   bind?: GatewayBindMode;
   host?: string;
+  /** Deprecated/no-op. The legacy browser Control UI has been removed; use Edwin Desktop. */
   controlUiEnabled?: boolean;
   openAiChatCompletionsEnabled?: boolean;
   openResponsesEnabled?: boolean;
@@ -43,22 +40,12 @@ export async function resolveGatewayRuntimeConfig(params: {
   const bindMode = params.bind ?? params.cfg.gateway?.bind ?? "loopback";
   const customBindHost = params.cfg.gateway?.customBindHost;
   const bindHost = params.host ?? (await resolveGatewayBindHost(bindMode, customBindHost));
-  // Control UI disabled by default — edwinpai-desktop is the preferred UI surface.
-  // Set gateway.controlUi.enabled=true or pass --control-ui to re-enable.
-  const controlUiEnabled =
-    params.controlUiEnabled ?? params.cfg.gateway?.controlUi?.enabled ?? false;
   const openAiChatCompletionsEnabled =
     params.openAiChatCompletionsEnabled ??
     params.cfg.gateway?.http?.endpoints?.chatCompletions?.enabled ??
     false;
   const openResponsesConfig = params.cfg.gateway?.http?.endpoints?.responses;
   const openResponsesEnabled = params.openResponsesEnabled ?? openResponsesConfig?.enabled ?? false;
-  const controlUiBasePath = normalizeControlUiBasePath(params.cfg.gateway?.controlUi?.basePath);
-  const controlUiRootRaw = params.cfg.gateway?.controlUi?.root;
-  const controlUiRoot =
-    typeof controlUiRootRaw === "string" && controlUiRootRaw.trim().length > 0
-      ? controlUiRootRaw.trim()
-      : undefined;
   const authBase = params.cfg.gateway?.auth ?? {};
   const authOverrides = params.auth ?? {};
   const authConfig = {
@@ -107,14 +94,11 @@ export async function resolveGatewayRuntimeConfig(params: {
 
   return {
     bindHost,
-    controlUiEnabled,
     openAiChatCompletionsEnabled,
     openResponsesEnabled,
     openResponsesConfig: openResponsesConfig
       ? { ...openResponsesConfig, enabled: openResponsesEnabled }
       : undefined,
-    controlUiBasePath,
-    controlUiRoot,
     resolvedAuth,
     authMode,
     tailscaleConfig,

@@ -113,13 +113,18 @@ function checkWrapperShape(pkg) {
   for (const required of allowedFiles) {
     if (!files.includes(required)) fail(`missing package files entry: ${required}`);
   }
+  for (const forbiddenField of ["pnpm", "vitest", "typesVersions"]) {
+    if (Object.hasOwn(pkg, forbiddenField)) {
+      fail(`forbidden private/dev manifest field present: ${forbiddenField}`);
+    }
+  }
   for (const requiredDep of [
     "@edwinpai/gateway-core",
     "@edwinpai/identity-core",
     "@edwinpai/shad-core",
   ]) {
-    if (pkg.dependencies?.[requiredDep] !== "1.0.0-beta.2") {
-      fail(`dependencies.${requiredDep} must be 1.0.0-beta.2`);
+    if (pkg.dependencies?.[requiredDep] !== "1.0.0-beta.3") {
+      fail(`dependencies.${requiredDep} must be 1.0.0-beta.3`);
     }
   }
   if (exists("packages")) fail("public wrapper export must not include packages/");

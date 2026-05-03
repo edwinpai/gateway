@@ -426,14 +426,10 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
     const channel: UpdateChannel = opts.channel ?? "dev";
     const branch = channel === "dev" ? await readBranchName(runCommand, gitRoot, timeoutMs) : null;
     const needsCheckoutMain = channel === "dev" && branch !== DEV_BRANCH;
-    gitTotalSteps = channel === "dev" ? (needsCheckoutMain ? 11 : 10) : 9;
+    gitTotalSteps = channel === "dev" ? (needsCheckoutMain ? 10 : 9) : 8;
 
     const statusCheck = await runStep(
-      step(
-        "clean check",
-        ["git", "-C", gitRoot, "status", "--porcelain", "--", ":!dist/control-ui/"],
-        gitRoot,
-      ),
+      step("clean check", ["git", "-C", gitRoot, "status", "--porcelain"], gitRoot),
     );
     steps.push(statusCheck);
     const hasUncommittedChanges =
@@ -740,14 +736,6 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
 
     const buildStep = await runStep(step("build", managerScriptArgs(manager, "build"), gitRoot));
     steps.push(buildStep);
-
-    const uiBuildStep = await runStep(
-      step("ui:build", managerScriptArgs(manager, "ui:build"), gitRoot),
-    );
-    steps.push(uiBuildStep);
-
-    // dist/control-ui/ is gitignored (since 0b19229f5), so no restore needed.
-    // ui:build output lives only in dist/ and doesn't affect repo cleanliness.
 
     const doctorStep = await runStep(
       step(

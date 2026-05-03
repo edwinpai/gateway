@@ -1,12 +1,12 @@
 // EdwinPAI palette tokens for CLI/UI theming.
-// Keep in sync with docs/cli/index.md (CLI palette section).
+// Brand accents should feel electric/sovereign (cyan/blue), not the old OpenClaw orange/red.
 export const EDWINPAI_PALETTE = {
-  accent: "#FF5A2D",
-  accentBright: "#FF7A3D",
-  accentDim: "#D14A22",
-  info: "#FF8A5B",
+  accent: "#22D3EE",
+  accentBright: "#67E8F9",
+  accentDim: "#0891B2",
+  info: "#38BDF8",
   success: "#2FBF71",
-  warn: "#FFB020",
-  error: "#E23D2D",
-  muted: "#8B7F77",
+  warn: "#FACC15",
+  error: "#EF4444",
+  muted: "#94A3B8",
 } as const;

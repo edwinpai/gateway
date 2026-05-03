@@ -10,7 +10,6 @@ import { createServer as createHttpsServer } from "node:https";
 import type { CanvasHostHandler } from "../canvas-host/server.js";
 import type { createSubsystemLogger } from "../logging/subsystem.js";
 import type { Certificate } from "../types/certificates.js";
-import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
 import { loadConfig } from "../config/config.js";
 import {
@@ -19,11 +18,6 @@ import {
   type ResolvedBsvAuth,
   type BsvAuthenticatedRequest,
 } from "./bsv-auth.js";
-import {
-  handleControlUiAvatarRequest,
-  handleControlUiHttpRequest,
-  type ControlUiRootState,
-} from "./control-ui.js";
 import { type CryptoGateway } from "./crypto-gateway.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
@@ -311,9 +305,6 @@ function bufferRequestBody(req: IncomingMessage): Promise<string> {
 
 export function createGatewayHttpServer(opts: {
   canvasHost: CanvasHostHandler | null;
-  controlUiEnabled: boolean;
-  controlUiBasePath: string;
-  controlUiRoot?: ControlUiRootState;
   openAiChatCompletionsEnabled: boolean;
   openResponsesEnabled: boolean;
   openResponsesConfig?: import("../config/types.gateway.js").GatewayHttpResponsesConfig;
@@ -326,9 +317,6 @@ export function createGatewayHttpServer(opts: {
 }): HttpServer {
   const {
     canvasHost,
-    controlUiEnabled,
-    controlUiBasePath,
-    controlUiRoot,
     openAiChatCompletionsEnabled,
     openResponsesEnabled,
     openResponsesConfig,
@@ -469,26 +457,6 @@ export function createGatewayHttpServer(opts: {
           return;
         }
       }
-      if (controlUiEnabled) {
-        if (
-          handleControlUiAvatarRequest(req, res, {
-            basePath: controlUiBasePath,
-            resolveAvatar: (agentId) => resolveAgentAvatar(configSnapshot, agentId),
-          })
-        ) {
-          return;
-        }
-        if (
-          handleControlUiHttpRequest(req, res, {
-            basePath: controlUiBasePath,
-            config: configSnapshot,
-            root: controlUiRoot,
-          })
-        ) {
-          return;
-        }
-      }
-
       res.statusCode = 404;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.end("Not Found");

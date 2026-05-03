@@ -7,6 +7,7 @@
     "sortScripts": true,
   },
   "ignorePatterns": [
+    ".tmp/",
     "apps/",
     "assets/",
     "dist/",

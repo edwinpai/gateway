@@ -18,6 +18,5 @@ COPY extensions/memory-core ./extensions/memory-core
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
-RUN pnpm ui:build
 
 CMD ["bash"]

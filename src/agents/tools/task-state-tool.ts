@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import crypto from "node:crypto";
+import type { SessionTaskState } from "../../config/sessions/types.js";
 import type { AnyAgentTool } from "./common.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -49,6 +50,22 @@ function resetRuntimeState(task: Record<string, unknown>) {
   delete task.lastEvaluationReason;
 }
 
+function isTerminalTask(task: SessionTaskState | undefined): boolean {
+  if (!task) {
+    return false;
+  }
+  if (task.status === "done" || task.status === "blocked" || task.status === "needs_user") {
+    return true;
+  }
+  return (
+    task.active === false &&
+    (task.lastStopReason === "done" ||
+      task.lastStopReason === "blocked" ||
+      task.lastStopReason === "needs_user" ||
+      task.lastStopReason === "max_iterations")
+  );
+}
+
 export function createTaskStateTool(opts?: { agentSessionKey?: string }): AnyAgentTool {
   return {
     label: "Task State",
@@ -74,14 +91,6 @@ export function createTaskStateTool(opts?: { agentSessionKey?: string }): AnyAge
       }) as SessionEntry;
       const reconciledExisting = reconcileTaskQueue(existing);
       const currentActiveTask = getActiveTask(reconciledExisting);
-      const next: SessionEntry = {
-        ...reconciledExisting,
-        sessionId: reconciledExisting.sessionId,
-        updatedAt: Date.now(),
-        activeTask: { ...(currentActiveTask ?? {}) },
-      };
-
-      const activeTask = next.activeTask ?? {};
       const taskId = readStringParam(params, "taskId");
       const title = readStringParam(params, "title");
       const goal = readStringParam(params, "goal");
@@ -94,17 +103,38 @@ export function createTaskStateTool(opts?: { agentSessionKey?: string }): AnyAge
       const status = readStringParam(params, "status");
       const redefiningTask = Boolean(taskId || title || goal || definitionOfDone || criteria);
       const rewritingProgress = Boolean(completedCriteria || completeCriteria);
+      const shouldStartFreshTask = !taskId && redefiningTask && isTerminalTask(currentActiveTask);
+      const next: SessionEntry = {
+        ...reconciledExisting,
+        sessionId: reconciledExisting.sessionId,
+        updatedAt: Date.now(),
+        activeTask: shouldStartFreshTask ? {} : { ...currentActiveTask },
+      };
+
+      const activeTask = next.activeTask ?? {};
 
       if (redefiningTask || rewritingProgress || status === "active") {
         resetRuntimeState(activeTask);
       }
 
-      if (taskId) activeTask.id = taskId;
-      if (title && !activeTask.goal) activeTask.goal = title;
-      if (goal) activeTask.goal = goal;
-      if (definitionOfDone) activeTask.definitionOfDone = definitionOfDone;
-      if (criteria) activeTask.criteria = unique(criteria);
-      if (completedCriteria) activeTask.completedCriteria = unique(completedCriteria);
+      if (taskId) {
+        activeTask.id = taskId;
+      }
+      if (title && !activeTask.goal) {
+        activeTask.goal = title;
+      }
+      if (goal) {
+        activeTask.goal = goal;
+      }
+      if (definitionOfDone) {
+        activeTask.definitionOfDone = definitionOfDone;
+      }
+      if (criteria) {
+        activeTask.criteria = unique(criteria);
+      }
+      if (completedCriteria) {
+        activeTask.completedCriteria = unique(completedCriteria);
+      }
       if (completeCriteria) {
         const prior = Array.isArray(activeTask.completedCriteria)
           ? activeTask.completedCriteria
@@ -117,8 +147,12 @@ export function createTaskStateTool(opts?: { agentSessionKey?: string }): AnyAge
       if (needsUserReason !== undefined) {
         activeTask.needsUserReason = needsUserReason || undefined;
       }
-      if (params.clearBlocked === true || status === "active") delete activeTask.blockedReason;
-      if (params.clearNeedsUser === true || status === "active") delete activeTask.needsUserReason;
+      if (params.clearBlocked === true || status === "active") {
+        delete activeTask.blockedReason;
+      }
+      if (params.clearNeedsUser === true || status === "active") {
+        delete activeTask.needsUserReason;
+      }
       if (
         status === "active" ||
         status === "done" ||

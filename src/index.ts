@@ -1,4 +1,4 @@
-export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.2";
+export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.3";
 export const EDWINPAI_GATEWAY_CORE_PACKAGE = "@edwinpai/gateway-core";
 
 export async function loadGatewayCore(): Promise<unknown> {

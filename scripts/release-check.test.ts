@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findBundledNativeAddons, isNativeIdentityCoreRequired } from "./release-check.ts";
+import {
+  findBundledNativeAddons,
+  findCompiledJsProtectedRuntimeFiles,
+  isNativeIdentityCoreRequired,
+  isNativeProtectedCoreReleaseRequired,
+} from "./release-check.ts";
 
 describe("isNativeIdentityCoreRequired", () => {
   it("returns false when env value is undefined", () => {
@@ -18,6 +23,16 @@ describe("isNativeIdentityCoreRequired", () => {
     expect(isNativeIdentityCoreRequired("true")).toBe(true);
     expect(isNativeIdentityCoreRequired("TRUE")).toBe(true);
     expect(isNativeIdentityCoreRequired("yes")).toBe(true);
+  });
+});
+
+describe("isNativeProtectedCoreReleaseRequired", () => {
+  it("uses the same truthy flag semantics as the identity-core strict mode", () => {
+    expect(isNativeProtectedCoreReleaseRequired(undefined)).toBe(false);
+    expect(isNativeProtectedCoreReleaseRequired("0")).toBe(false);
+    expect(isNativeProtectedCoreReleaseRequired("false")).toBe(false);
+    expect(isNativeProtectedCoreReleaseRequired("1")).toBe(true);
+    expect(isNativeProtectedCoreReleaseRequired("yes")).toBe(true);
   });
 });
 
@@ -63,5 +78,29 @@ describe("findBundledNativeAddons", () => {
       "native/darwin-arm64/identity-core.node",
     ];
     expect(findBundledNativeAddons(paths)).toEqual(["native/darwin-arm64/identity-core.node"]);
+  });
+});
+
+describe("findCompiledJsProtectedRuntimeFiles", () => {
+  it("finds compiled runtime JS under dist", () => {
+    expect(
+      findCompiledJsProtectedRuntimeFiles([
+        "package.json",
+        "dist/index.js",
+        "dist/entry.mjs",
+        "dist/index.d.ts",
+        "native/linux-x64-gnu/shad-core.node",
+      ]),
+    ).toEqual(["dist/index.js", "dist/entry.mjs"]);
+  });
+
+  it("ignores declarations, package metadata, and native addons", () => {
+    expect(
+      findCompiledJsProtectedRuntimeFiles([
+        "README.md",
+        "dist/index.d.ts",
+        "native/darwin-arm64/identity-core.node",
+      ]),
+    ).toEqual([]);
   });
 });

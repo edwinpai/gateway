@@ -76,7 +76,26 @@ RSYNC_ARGS=(
   --exclude '/src/shad-core*'
   --exclude '/src/memory/'
   --exclude '/extensions/shad-context/'
-  --exclude '/skills/shad-protocol/'
+  # Keep the public/npm wrapper lean: only ship the intentionally supported
+  # bundled skills for v1 beta. Source-only skills remain in the private repo.
+  --include '/skills/'
+  --include '/skills/coding-agent/***'
+  --include '/skills/github/***'
+  --include '/skills/healthcheck/***'
+  --include '/skills/himalaya/***'
+  --include '/skills/imsg/***'
+  --include '/skills/nano-pdf/***'
+  --include '/skills/openai-image-gen/***'
+  --include '/skills/openai-whisper/***'
+  --include '/skills/openai-whisper-api/***'
+  --include '/skills/peekaboo/***'
+  --include '/skills/session-logs/***'
+  --include '/skills/skill-creator/***'
+  --include '/skills/tmux/***'
+  --include '/skills/video-frames/***'
+  --include '/skills/wacli/***'
+  --include '/skills/weather/***'
+  --exclude '/skills/*'
   --exclude '/docs/concepts/memory.mdx'
   --exclude '/docs/reference/templates/memory/'
   --exclude '/SHAD_ARCHITECTURE_SPEC.md'
@@ -87,6 +106,9 @@ RSYNC_ARGS=(
   --exclude '/scripts/sqlite-vec-smoke.mjs'
   --exclude '/scripts/prepare-identity-core-base-package.ts'
   --exclude '/scripts/prepare-identity-core-platform-packages.ts'
+  --exclude '/scripts/prepare-shad-core-platform-packages.ts'
+  --exclude '/scripts/stage-local-identity-core-artifact.ts'
+  --exclude '/scripts/stage-local-shad-core-artifact.ts'
   --exclude '/scripts/sync-identity-core-artifacts.ts'
   --exclude '/src/gateway/*memory*'
   --exclude '/src/gateway/__tests__/*memory*'
@@ -145,12 +167,16 @@ pkg.scripts = {
   prepack: "pnpm build",
 };
 pkg.dependencies = {
-  "@edwinpai/gateway-core": "1.0.0-beta.2",
-  "@edwinpai/identity-core": "1.0.0-beta.2",
-  "@edwinpai/shad-core": "1.0.0-beta.2",
+  "@edwinpai/gateway-core": "1.0.0-beta.3",
+  "@edwinpai/identity-core": "1.0.0-beta.3",
+  "@edwinpai/shad-core": "1.0.0-beta.3",
 };
 delete pkg.peerDependencies;
 delete pkg.peerDependenciesMeta;
+delete pkg.types;
+delete pkg.typesVersions;
+delete pkg.vitest;
+delete pkg.pnpm;
 pkg.devDependencies = {
   "@types/node": "^25.2.0",
   tsdown: "^0.20.1",
@@ -191,7 +217,7 @@ EOF
 
   mkdir -p "$TARGET_DIR/src"
   cat > "$TARGET_DIR/src/index.ts" <<'EOF'
-export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.2";
+export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.3";
 export const EDWINPAI_GATEWAY_CORE_PACKAGE = "@edwinpai/gateway-core";
 
 export async function loadGatewayCore(): Promise<unknown> {
