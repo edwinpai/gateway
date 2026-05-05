@@ -2,7 +2,7 @@
   "name": "@edwinpai/edwinpai",
   "version": "1.0.0-beta.7",
   "private": false,
-  "description": "EdwinPAI — Personal AI agent framework with cryptographic security",
+  "description": "EdwinPAI \u2014 Personal AI agent framework with cryptographic security",
   "keywords": [],
   "license": "BSL-1.1",
   "author": "",
@@ -12,6 +12,8 @@
   "files": [
     "dist/",
     "edwinpai.mjs",
+    "extensions/",
+    "install.sh",
     "LICENSE",
     "README.md",
     "README-header.png"
