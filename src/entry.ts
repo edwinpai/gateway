@@ -6,13 +6,13 @@ async function main() {
   const runtime = await loadGatewayCore().catch((error: unknown) => {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `EdwinPAI protected gateway runtime is not installed. Expected compiled runtime package ${EDWINPAI_GATEWAY_CORE_PACKAGE}. ` +
-        `Publish/install the protected runtime package before using this public wrapper. ${detail}`,
+      `EdwinPAI gateway runtime is not installed. Expected package ${EDWINPAI_GATEWAY_CORE_PACKAGE}. ` +
+        `Install @edwinpai/edwinpai@beta again and retry. ${detail}`,
     );
   });
   const maybeRunCli = (runtime as { runCli?: (argv: string[]) => unknown }).runCli;
   if (typeof maybeRunCli !== "function") {
-    throw new Error(`Protected gateway runtime package ${EDWINPAI_GATEWAY_CORE_PACKAGE} does not export runCli(argv).`);
+    throw new Error(`Gateway runtime package ${EDWINPAI_GATEWAY_CORE_PACKAGE} does not export runCli(argv).`);
   }
   await maybeRunCli(process.argv);
 }

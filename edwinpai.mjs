@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const cliRoot = path.dirname(fileURLToPath(import.meta.url));
-const protectedWorkspacePackages = [
+const workspaceLinkPackages = [
   { name: "@edwinpai/identity-core", dir: path.join("packages", "identity-core") },
 ];
 
@@ -83,7 +83,7 @@ function repairLocalWorkspaceLinks() {
     return;
   }
 
-  for (const workspacePackage of protectedWorkspacePackages) {
+  for (const workspacePackage of workspaceLinkPackages) {
     if (!isWorkspaceDependency(rootPackage, workspacePackage.name)) {
       continue;
     }

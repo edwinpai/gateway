@@ -1,5 +1,4 @@
-// Public export type shim.
-// Protected memory/config internals are intentionally excluded from this repo.
+// Minimal type shim for the gateway wrapper package.
 export type EdwinPAIConfig = Record<string, unknown>;
 export type ConfigFileSnapshot = Record<string, unknown>;
 export type ConfigValidationIssue = Record<string, unknown>;

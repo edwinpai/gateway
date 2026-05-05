@@ -65,19 +65,19 @@ function checkScripts(pkg) {
     }
   }
   for (const forbidden of [
-    "build:protected",
-    "check:protected-cores",
+    "build:core",
+    "check:core-packages",
     "release:check",
     "build:gateway",
     "ui:build",
   ]) {
     if (Object.hasOwn(pkg.scripts, forbidden)) {
-      fail(`forbidden private script present: scripts.${forbidden}`);
+      fail(`forbidden internal script present: scripts.${forbidden}`);
     }
   }
   if (pkg.scripts.build !== "tsdown") {
     fail(
-      `public wrapper build script must be exactly "tsdown", got ${JSON.stringify(pkg.scripts.build)}`,
+      `wrapper build script must be exactly "tsdown", got ${JSON.stringify(pkg.scripts.build)}`,
     );
   }
 }
@@ -98,7 +98,7 @@ function checkEntrypoints(pkg) {
 
 function checkWrapperShape(pkg) {
   if (pkg.name !== "@edwinpai/edwinpai") fail(`unexpected package name: ${pkg.name}`);
-  if (pkg.private !== false) fail("public wrapper package must set private=false");
+  if (pkg.private !== false) fail("wrapper package must be publishable (private=false)");
   const files = Array.isArray(pkg.files) ? pkg.files : [];
   const allowedFiles = new Set([
     "dist/",
@@ -115,7 +115,7 @@ function checkWrapperShape(pkg) {
   }
   for (const forbiddenField of ["pnpm", "vitest", "typesVersions"]) {
     if (Object.hasOwn(pkg, forbiddenField)) {
-      fail(`forbidden private/dev manifest field present: ${forbiddenField}`);
+      fail(`forbidden internal/dev manifest field present: ${forbiddenField}`);
     }
   }
   const expectedDeps = {
@@ -128,11 +128,11 @@ function checkWrapperShape(pkg) {
       fail(`dependencies.${requiredDep} must be ${expectedVersion}`);
     }
   }
-  if (exists("packages")) fail("public wrapper export must not include packages/");
+  if (exists("packages")) fail("package export must not include packages/");
   if (exists("pnpm-workspace.yaml"))
-    fail("public wrapper export must not include pnpm-workspace.yaml");
+    fail("package export must not include pnpm-workspace.yaml");
   if (exists("pnpm-lock.yaml"))
-    fail("public wrapper export must not include stale private pnpm-lock.yaml");
+    fail("package export must not include stale pnpm-lock.yaml");
 }
 
 const pkg = readJson(packagePath);
@@ -144,9 +144,9 @@ if (pkg) {
 }
 
 if (failures.length > 0) {
-  console.error(`public package manifest check failed for ${root}`);
+  console.error(`package manifest check failed for ${root}`);
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log(`public package manifest check passed: ${root}`);
+console.log(`package manifest check passed: ${root}`);

@@ -60,7 +60,7 @@ failures=0
 for pattern in "${PROTECTED_PATH_PATTERNS[@]}"; do
   while IFS= read -r -d '' match; do
     rel="${match#"$ROOT/"}"
-    printf 'protected public-export path present: %s\n' "$rel" >&2
+    printf 'forbidden package-export path present: %s\n' "$rel" >&2
     failures=$((failures + 1))
   done < <(find "$ROOT" -path "$ROOT/.git" -prune -o -path "$ROOT/node_modules" -prune -o -path "$ROOT/.pnpm-store" -prune -o -path "$ROOT/$pattern" -print0)
 done
@@ -72,8 +72,8 @@ if rg -n --hidden --glob '!.git/**' --glob '!node_modules/**' --glob '!pnpm-lock
 fi
 
 if (( failures > 0 )); then
-  printf 'public export guard failed with %d protected finding(s)\n' "$failures" >&2
+  printf 'package export guard failed with %d forbidden finding(s)\n' "$failures" >&2
   exit 1
 fi
 
-printf 'public export guard passed: %s\n' "$ROOT"
+printf 'package export guard passed: %s\n' "$ROOT"

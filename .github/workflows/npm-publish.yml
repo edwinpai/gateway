@@ -24,7 +24,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - name: Guard protected source boundaries
+      - name: Guard package boundaries
         run: |
           chmod +x scripts/public-export-guard.sh scripts/public-package-manifest-check.mjs
           scripts/public-export-guard.sh .

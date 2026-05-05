@@ -1,5 +1,4 @@
-// Public export runtime shim.
-// Full prompt/memory composition internals are protected and excluded from this repo.
+// Minimal runtime shim for the gateway wrapper package.
 export function buildEmbeddedSystemPrompt(params: { extraSystemPrompt?: string } = {}): string {
   return params.extraSystemPrompt?.trim() ?? "";
 }
