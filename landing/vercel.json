@@ -1,9 +1,0 @@
-{
-  "buildCommand": "npx vite build",
-  "outputDirectory": "dist",
-  "framework": null,
-  "rewrites": [
-    { "source": "/api/checkout", "destination": "/api/checkout" },
-    { "source": "/api/waitlist", "destination": "/api/waitlist" }
-  ]
-}

@@ -1,8 +1,0 @@
-# SwiftLint config disabled for app repos migration
-excluded:
-  - .build
-  - DerivedData
-  - node_modules
-  - dist
-  - coverage
-reporter: "xcode"
