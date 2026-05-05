@@ -1,6 +1,6 @@
 {
   "name": "@edwinpai/edwinpai",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "private": false,
   "description": "EdwinPAI — Personal AI agent framework with cryptographic security",
   "keywords": [],
@@ -27,7 +27,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@edwinpai/gateway-core": "1.0.0-beta.5",
+    "@edwinpai/gateway-core": "1.0.0-beta.6",
     "@edwinpai/identity-core": "1.0.0-beta.5",
     "@edwinpai/shad-core": "1.0.0-beta.5"
   },

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-beta.6
+
+### Changes
+
+- Version alignment with core EdwinPAI release numbers.
+
 ## 1.0.0-beta.2
 
 ### Changes
