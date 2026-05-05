@@ -168,8 +168,8 @@ pkg.scripts = {
 };
 pkg.dependencies = {
   "@edwinpai/gateway-core": "1.0.0-beta.6",
-  "@edwinpai/identity-core": "1.0.0-beta.5",
-  "@edwinpai/shad-core": "1.0.0-beta.5",
+  "@edwinpai/identity-core": "1.0.0-beta.6",
+  "@edwinpai/shad-core": "1.0.0-beta.6",
 };
 delete pkg.peerDependencies;
 delete pkg.peerDependenciesMeta;
