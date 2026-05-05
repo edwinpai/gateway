@@ -321,4 +321,14 @@ export type GatewayConfig = {
    * `x-real-ip`) to determine the client IP for local pairing and HTTP checks.
    */
   trustedProxies?: string[];
+  /** Response-level cache: returns cached LLM responses for semantically similar questions. */
+  responseCache?: {
+    enabled?: boolean;
+    /** Cosine similarity threshold (default: 0.94). Higher = stricter matching. */
+    similarityThreshold?: number;
+    /** Maximum cached entries (default: 200). */
+    maxEntries?: number;
+    /** TTL in milliseconds (default: 259200000 / 72 hours). */
+    ttlMs?: number;
+  };
 };

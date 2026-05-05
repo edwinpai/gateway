@@ -130,4 +130,50 @@ describe("auditGatewayServiceConfig", () => {
       ),
     ).toBe(false);
   });
+
+  it("accepts a launchd wrapper that execs the installed edwinpai gateway", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "edwinpai-service-audit-home-"));
+    const wrapperPath = path.join(home, "launchd-gateway-wrapper.sh");
+    fs.writeFileSync(
+      wrapperPath,
+      '#!/bin/sh\nexec "$HOME/.local/bin/edwinpai" gateway --port "${EDWINPAI_GATEWAY_PORT:-18789}"\n',
+      "utf8",
+    );
+
+    const audit = await auditGatewayServiceConfig({
+      env: { HOME: home },
+      platform: "darwin",
+      command: {
+        programArguments: [wrapperPath],
+        environment: { PATH: buildMinimalServicePath({ platform: "darwin", env: { HOME: home } }) },
+      },
+    });
+
+    expect(
+      audit.issues.some((issue) => issue.code === SERVICE_AUDIT_CODES.gatewayCommandMissing),
+    ).toBe(false);
+  });
+
+  it("flags launchd wrappers pinned to source checkout dist paths", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "edwinpai-service-audit-home-"));
+    const wrapperPath = path.join(home, "launchd-gateway-wrapper.sh");
+    fs.writeFileSync(
+      wrapperPath,
+      "#!/bin/sh\nexec /usr/local/bin/node /Users/jake/Desktop/edwin/dist/index.js gateway --port 18789\n",
+      "utf8",
+    );
+
+    const audit = await auditGatewayServiceConfig({
+      env: { HOME: home },
+      platform: "darwin",
+      command: {
+        programArguments: [wrapperPath],
+        environment: { PATH: buildMinimalServicePath({ platform: "darwin", env: { HOME: home } }) },
+      },
+    });
+
+    expect(
+      audit.issues.some((issue) => issue.code === SERVICE_AUDIT_CODES.gatewayWrapperSourceCheckout),
+    ).toBe(true);
+  });
 });

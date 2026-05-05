@@ -16,6 +16,7 @@ import {
   writeDone,
 } from "./http-common.js";
 import { getBearerToken, resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
+import { getResponseCache } from "./response-cache.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
@@ -231,6 +232,56 @@ export async function handleOpenAiHttpRequest(
   const runId = `chatcmpl_${randomUUID()}`;
   const deps = createDefaultDeps();
 
+  // Response cache lookup — short-circuit LLM call if we have a cached answer
+  const responseCache = getResponseCache();
+  const cacheHit = await responseCache.lookup(prompt.message).catch(() => null);
+  if (cacheHit) {
+    const cachedContent = cacheHit.entry.response;
+    if (!stream) {
+      sendJson(res, 200, {
+        id: runId,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: cachedContent },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached: true },
+      });
+      return true;
+    }
+    // Streaming cache hit — emit as single chunk
+    setSseHeaders(res);
+    writeSse(res, {
+      id: runId,
+      object: "chat.completion.chunk",
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{ index: 0, delta: { role: "assistant" } }],
+    });
+    writeSse(res, {
+      id: runId,
+      object: "chat.completion.chunk",
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{ index: 0, delta: { content: cachedContent }, finish_reason: null }],
+    });
+    writeSse(res, {
+      id: runId,
+      object: "chat.completion.chunk",
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+    });
+    writeDone(res);
+    res.end();
+    return true;
+  }
+
   if (!stream) {
     try {
       const result = await agentCommand(
@@ -255,6 +306,9 @@ export async function handleOpenAiHttpRequest(
               .filter(Boolean)
               .join("\n\n")
           : "No response from EdwinPAI.";
+
+      // Store in response cache (fire-and-forget)
+      responseCache.store(prompt.message, content, model).catch(() => {});
 
       sendJson(res, 200, {
         id: runId,
@@ -283,6 +337,7 @@ export async function handleOpenAiHttpRequest(
   let wroteRole = false;
   let sawAssistantDelta = false;
   let closed = false;
+  const streamedChunks: string[] = []; // Accumulate for response cache
 
   const unsubscribe = onAgentEvent((evt) => {
     if (evt.runId !== runId) {
@@ -299,6 +354,7 @@ export async function handleOpenAiHttpRequest(
       if (!content) {
         return;
       }
+      streamedChunks.push(content);
 
       if (!wroteRole) {
         wroteRole = true;
@@ -331,6 +387,11 @@ export async function handleOpenAiHttpRequest(
     if (evt.stream === "lifecycle") {
       const phase = evt.data?.phase;
       if (phase === "end" || phase === "error") {
+        // Store successful streamed response in cache
+        if (phase === "end" && streamedChunks.length > 0) {
+          const fullResponse = streamedChunks.join("");
+          responseCache.store(prompt.message, fullResponse, model).catch(() => {});
+        }
         closed = true;
         unsubscribe();
         writeDone(res);

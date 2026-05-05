@@ -1,13 +1,32 @@
 import type { DaemonLifecycleOptions } from "./types.js";
+import { loadConfig } from "../../config/config.js";
 import { resolveIsNixMode } from "../../config/paths.js";
+import {
+  auditGatewayServiceConfig,
+  SERVICE_AUDIT_CODES,
+  type ServiceConfigIssue,
+} from "../../daemon/service-audit.js";
 import { resolveGatewayService } from "../../daemon/service.js";
 import { renderSystemdUnavailableHints } from "../../daemon/systemd-hints.js";
 import { isSystemdUserServiceAvailable } from "../../daemon/systemd.js";
 import { isWSL } from "../../infra/wsl.js";
 import { defaultRuntime } from "../../runtime.js";
+import { formatCliCommand } from "../command-format.js";
 import { killConflictingGatewayProcesses } from "./conflicts.js";
 import { buildDaemonServiceSnapshot, createNullWriter, emitDaemonActionJson } from "./response.js";
 import { renderGatewayServiceStartHints } from "./shared.js";
+
+function isRestartBlockingServiceIssue(issue: ServiceConfigIssue): boolean {
+  return issue.level === "aggressive" || issue.code === SERVICE_AUDIT_CODES.gatewayCommandMissing;
+}
+
+function renderServiceRepairHints(): string[] {
+  return [
+    formatCliCommand("edwinpai gateway install --force"),
+    formatCliCommand("edwinpai gateway restart"),
+    formatCliCommand("edwinpai gateway status"),
+  ];
+}
 
 export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
@@ -298,6 +317,39 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
     }
     return false;
   }
+
+  const command = await service.readCommand(process.env).catch(() => null);
+  const audit = await auditGatewayServiceConfig({
+    env: process.env,
+    command,
+    config: loadConfig(),
+  }).catch(() => null);
+  const blockingIssues = audit?.issues.filter(isRestartBlockingServiceIssue) ?? [];
+  if (blockingIssues.length > 0) {
+    const hints = renderServiceRepairHints();
+    const detail = blockingIssues
+      .map((issue) => (issue.detail ? `${issue.message} (${issue.detail})` : issue.message))
+      .join("; ");
+    emit({
+      ok: false,
+      result: "repair-required",
+      error: `Gateway service wiring looks stale or non-standard: ${detail}`,
+      hints,
+      service: buildDaemonServiceSnapshot(service, loaded),
+    });
+    if (!json) {
+      defaultRuntime.error(`Gateway service wiring looks stale or non-standard: ${detail}`);
+      defaultRuntime.error(
+        "Restart skipped because the service may still launch an older EdwinPAI install.",
+      );
+      for (const hint of hints) {
+        defaultRuntime.error(`Repair with: ${hint}`);
+      }
+    }
+    defaultRuntime.exit(1);
+    return false;
+  }
+
   try {
     let activeGatewayPid: number | null = null;
     try {

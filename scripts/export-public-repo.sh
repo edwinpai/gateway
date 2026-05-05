@@ -153,7 +153,7 @@ const packagePath = process.argv[2];
 const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 pkg.private = false;
 pkg.publishConfig = {
-  access: "restricted",
+  access: "public",
   tag: "beta",
 };
 pkg.bin = { edwinpai: "edwinpai.mjs" };
@@ -167,9 +167,9 @@ pkg.scripts = {
   prepack: "pnpm build",
 };
 pkg.dependencies = {
-  "@edwinpai/gateway-core": "1.0.0-beta.3",
-  "@edwinpai/identity-core": "1.0.0-beta.3",
-  "@edwinpai/shad-core": "1.0.0-beta.3",
+  "@edwinpai/gateway-core": "1.0.0-beta.5",
+  "@edwinpai/identity-core": "1.0.0-beta.5",
+  "@edwinpai/shad-core": "1.0.0-beta.5",
 };
 delete pkg.peerDependencies;
 delete pkg.peerDependenciesMeta;
@@ -217,7 +217,7 @@ EOF
 
   mkdir -p "$TARGET_DIR/src"
   cat > "$TARGET_DIR/src/index.ts" <<'EOF'
-export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.3";
+export const EDWINPAI_PUBLIC_WRAPPER_VERSION = "1.0.0-beta.5";
 export const EDWINPAI_GATEWAY_CORE_PACKAGE = "@edwinpai/gateway-core";
 
 export async function loadGatewayCore(): Promise<unknown> {

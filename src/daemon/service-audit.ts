@@ -38,6 +38,7 @@ export const SERVICE_AUDIT_CODES = {
   gatewayPathMissing: "gateway-path-missing",
   gatewayPathMissingDirs: "gateway-path-missing-dirs",
   gatewayPathNonMinimal: "gateway-path-nonminimal",
+  gatewayWrapperSourceCheckout: "gateway-wrapper-source-checkout",
   gatewayRuntimeBun: "gateway-runtime-bun",
   gatewayRuntimeNodeVersionManager: "gateway-runtime-node-version-manager",
   gatewayRuntimeNodeSystemMissing: "gateway-runtime-node-system-missing",
@@ -191,17 +192,63 @@ async function auditLaunchdPlist(
   }
 }
 
-function auditGatewayCommand(programArguments: string[] | undefined, issues: ServiceConfigIssue[]) {
+async function readServiceWrapper(programArguments: string[] | undefined): Promise<string | null> {
+  const wrapperPath = programArguments?.[0];
+  if (!wrapperPath || !path.isAbsolute(wrapperPath)) {
+    return null;
+  }
+  try {
+    const stat = await fs.stat(wrapperPath);
+    if (!stat.isFile() || stat.size > 64_000) {
+      return null;
+    }
+    return await fs.readFile(wrapperPath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function wrapperLaunchesEdwinpaiGateway(content: string): boolean {
+  return /edwinpai(?:["']|\s).*\bgateway\b/i.test(content);
+}
+
+function wrapperLaunchesSourceCheckout(content: string): boolean {
+  return /[/\]dist[/\][^\s"']*index\.(?:js|mjs|cjs)\b/i.test(content);
+}
+
+async function auditGatewayCommand(
+  programArguments: string[] | undefined,
+  issues: ServiceConfigIssue[],
+) {
   if (!programArguments || programArguments.length === 0) {
     return;
   }
-  if (!hasGatewaySubcommand(programArguments)) {
-    issues.push({
-      code: SERVICE_AUDIT_CODES.gatewayCommandMissing,
-      message: "Service command does not include the gateway subcommand",
-      level: "aggressive",
-    });
+  if (hasGatewaySubcommand(programArguments)) {
+    return;
   }
+
+  const wrapper = await readServiceWrapper(programArguments);
+  if (wrapper) {
+    if (wrapperLaunchesSourceCheckout(wrapper)) {
+      issues.push({
+        code: SERVICE_AUDIT_CODES.gatewayWrapperSourceCheckout,
+        message:
+          "Service wrapper launches a source checkout/dist path instead of the installed edwinpai CLI",
+        detail: programArguments[0],
+        level: "aggressive",
+      });
+      return;
+    }
+    if (wrapperLaunchesEdwinpaiGateway(wrapper)) {
+      return;
+    }
+  }
+
+  issues.push({
+    code: SERVICE_AUDIT_CODES.gatewayCommandMissing,
+    message: "Service command does not include the gateway subcommand",
+    level: "aggressive",
+  });
 }
 
 function isNodeRuntime(execPath: string): boolean {
@@ -431,7 +478,7 @@ export async function auditGatewayServiceConfig(params: {
   const issues: ServiceConfigIssue[] = [];
   const platform = params.platform ?? process.platform;
 
-  auditGatewayCommand(params.command?.programArguments, issues);
+  await auditGatewayCommand(params.command?.programArguments, issues);
   auditGatewayServicePath(params.command, issues, params.env, platform);
   await auditGatewayRuntime(params.env, params.command, issues, platform);
   await auditGatewayEmbeddingServiceEnv({

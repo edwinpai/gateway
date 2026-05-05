@@ -1,4 +1,7 @@
 import { Command } from "commander";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const callGateway = vi.fn(async () => ({ ok: true }));
@@ -279,5 +282,37 @@ describe("daemon-cli coverage", () => {
     const parsed = jsonLines.map((line) => JSON.parse(line) as { action?: string; ok?: boolean });
     expect(parsed.some((entry) => entry.action === "start" && entry.ok === true)).toBe(true);
     expect(parsed.some((entry) => entry.action === "stop" && entry.ok === true)).toBe(true);
+  });
+
+  it("refuses to restart a stale gateway service wrapper", async () => {
+    runtimeLogs.length = 0;
+    runtimeErrors.length = 0;
+    serviceRestart.mockClear();
+    serviceIsLoaded.mockResolvedValue(true);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "edwinpai-stale-wrapper-"));
+    const wrapperPath = path.join(home, "launchd-gateway-wrapper.sh");
+    fs.writeFileSync(
+      wrapperPath,
+      "#!/bin/sh\nexec /usr/local/bin/node /Users/jake/Desktop/edwin/dist/index.js gateway --port 18789\n",
+      "utf8",
+    );
+    serviceReadCommand.mockResolvedValueOnce({
+      programArguments: [wrapperPath],
+      environment: { PATH: "/Users/jake/.local/bin:/usr/bin:/bin", HOME: "/Users/jake" },
+      sourcePath: "/Users/jake/Library/LaunchAgents/ai.edwinpai.gateway.plist",
+    });
+
+    const { registerDaemonCli } = await import("./daemon-cli.js");
+    const program = new Command();
+    program.exitOverride();
+    registerDaemonCli(program);
+
+    await expect(program.parseAsync(["daemon", "restart"], { from: "user" })).rejects.toThrow(
+      "__exit__:1",
+    );
+
+    expect(serviceRestart).not.toHaveBeenCalled();
+    expect(runtimeErrors.join("\n")).toContain("Gateway service wiring looks stale");
+    expect(runtimeErrors.join("\n")).toContain("edwinpai gateway install --force");
   });
 });

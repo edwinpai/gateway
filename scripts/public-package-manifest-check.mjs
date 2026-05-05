@@ -123,8 +123,8 @@ function checkWrapperShape(pkg) {
     "@edwinpai/identity-core",
     "@edwinpai/shad-core",
   ]) {
-    if (pkg.dependencies?.[requiredDep] !== "1.0.0-beta.3") {
-      fail(`dependencies.${requiredDep} must be 1.0.0-beta.3`);
+    if (pkg.dependencies?.[requiredDep] !== "1.0.0-beta.5") {
+      fail(`dependencies.${requiredDep} must be 1.0.0-beta.5`);
     }
   }
   if (exists("packages")) fail("public wrapper export must not include packages/");
