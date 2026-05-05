@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-beta.7
+
+- Align package version with EdwinPAI beta.7 release.
+
 ## 1.0.0-beta.6
 
 ### Changes
