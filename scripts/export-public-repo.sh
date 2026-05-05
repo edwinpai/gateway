@@ -388,7 +388,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access restricted --tag beta
+        run: npm publish --access public --tag beta
 EOF
 
   cat > "$TARGET_DIR/PUBLIC_EXPORT.md" <<'EOF'
