@@ -76,9 +76,7 @@ function checkScripts(pkg) {
     }
   }
   if (pkg.scripts.build !== "tsdown") {
-    fail(
-      `wrapper build script must be exactly "tsdown", got ${JSON.stringify(pkg.scripts.build)}`,
-    );
+    fail(`wrapper build script must be exactly "tsdown", got ${JSON.stringify(pkg.scripts.build)}`);
   }
 }
 
@@ -119,9 +117,9 @@ function checkWrapperShape(pkg) {
     }
   }
   const expectedDeps = {
-    "@edwinpai/gateway-core": "1.0.0-beta.7",
-    "@edwinpai/identity-core": "1.0.0-beta.7",
-    "@edwinpai/shad-core": "1.0.0-beta.7",
+    "@edwinpai/gateway-core": "1.0.0-beta.8",
+    "@edwinpai/identity-core": "1.0.0-beta.8",
+    "@edwinpai/shad-core": "1.0.0-beta.8",
   };
   for (const [requiredDep, expectedVersion] of Object.entries(expectedDeps)) {
     if (pkg.dependencies?.[requiredDep] !== expectedVersion) {
@@ -129,10 +127,8 @@ function checkWrapperShape(pkg) {
     }
   }
   if (exists("packages")) fail("package export must not include packages/");
-  if (exists("pnpm-workspace.yaml"))
-    fail("package export must not include pnpm-workspace.yaml");
-  if (exists("pnpm-lock.yaml"))
-    fail("package export must not include stale pnpm-lock.yaml");
+  if (exists("pnpm-workspace.yaml")) fail("package export must not include pnpm-workspace.yaml");
+  if (exists("pnpm-lock.yaml")) fail("package export must not include stale pnpm-lock.yaml");
 }
 
 const pkg = readJson(packagePath);
