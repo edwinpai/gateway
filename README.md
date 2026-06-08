@@ -19,7 +19,7 @@ Requires Node.js 22.12 or newer.
 
 ## Current beta
 
-The current beta line is `1.0.0-beta.8`. The wrapper and companion runtime packages are versioned together so users see one coherent EdwinPAI system version.
+The current beta line is `1.0.0-beta.9`. The wrapper and companion runtime packages are versioned together so users see one coherent EdwinPAI system version.
 
 ## Development
 

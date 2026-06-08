@@ -117,9 +117,9 @@ function checkWrapperShape(pkg) {
     }
   }
   const expectedDeps = {
-    "@edwinpai/gateway-core": "1.0.0-beta.8",
-    "@edwinpai/identity-core": "1.0.0-beta.8",
-    "@edwinpai/shad-core": "1.0.0-beta.8",
+    "@edwinpai/gateway-core": "1.0.0-beta.9",
+    "@edwinpai/identity-core": "1.0.0-beta.9",
+    "@edwinpai/shad-core": "1.0.0-beta.9",
   };
   for (const [requiredDep, expectedVersion] of Object.entries(expectedDeps)) {
     if (pkg.dependencies?.[requiredDep] !== expectedVersion) {
